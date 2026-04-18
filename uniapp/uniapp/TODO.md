@@ -1,0 +1,61 @@
+# 司机报账微信小程序 - 开发任务
+
+## Plan
+- [x] 步骤1：初始化 Supabase 并创建数据库结构
+  - [x] 初始化 Supabase 项目
+  - [x] 创建7张数据表及 RLS 策略
+  - [x] 创建图片存储 bucket
+  - [x] 插入初始数据（13个司机、45个车牌、费用类型等）
+- [x] 步骤2：创建数据库类型定义和 API 封装
+  - [x] 定义 TypeScript 接口
+  - [x] 封装数据库查询函数
+  - [x] 创建图片上传工具函数
+- [x] 步骤3：修改认证系统
+  - [x] 修改 AuthContext 支持司机登录
+  - [x] 修改 RouteGuard 配置公开页面
+  - [x] 更新 app.tsx 添加 AuthProvider
+- [x] 步骤4：创建登录页
+- [x] 步骤5：创建报账提交页（首页）
+  - [x] 创建车辆卡片组件
+  - [x] 创建费用行组件
+  - [x] 实现自动暂存功能
+  - [x] 实现车牌智能搜索
+- [x] 步骤6：创建报账记录页
+  - [x] 记录列表页
+  - [x] 记录详情页
+  - [x] 记录编辑页
+- [x] 步骤7：创建我的页面
+- [x] 步骤8：更新路由配置和 TabBar
+- [x] 步骤9：运行 lint 并修复问题
+- [x] 步骤10：优化加班记录逻辑
+  - [x] 为 expense_records 表添加 is_overtime 字段
+  - [x] 删除 overtime_records 独立表
+  - [x] 修改报账提交逻辑，加班状态写入 is_overtime 字段
+  - [x] 修改加班统计逻辑，只统计已确认的记录
+- [x] 步骤11：切换到本地数据库
+  - [x] 更新 .env 文件配置本地数据库连接
+  - [x] 验证数据库表结构和数据完整性
+  - [x] 验证 RLS 策略配置
+  - [x] 验证存储桶配置
+- [x] 步骤12：硬编码数据库连接信息
+  - [x] 修改 src/client/supabase.ts，不使用环境变量
+  - [x] 直接在代码中配置 URL 和 ANON_KEY
+  - [x] 运行 lint 检查确保代码正确
+
+## Notes
+- 使用用户名+密码登录（不使用微信登录）
+- 司机只能查看和修改自己的数据
+- 待确认的记录可编辑，已确认的记录锁定
+- 报账页面实现自动暂存功能
+- 凭证图片最多9张，需要压缩到1MB以内
+- 加班记录已优化：使用 expense_records.is_overtime 字段，只统计已确认的记录
+- 加班次数统计逻辑：按 record_date 去重后的天数，而非记录条数
+  - 示例：3月5日提交5条记录都标加班，3月6日提交3条也标加班 → 加班次数 = 2天
+- 所有功能已完成，lint 检查通过
+- 已成功切换到本地数据库：https://rwjbladqwubgjotlygyy.supabase.co
+- 本地数据库验证完成：
+  - ✅ 6张表已创建（drivers, vehicles, expense_records, fee_types, service_staff, advance_fund_records）
+  - ✅ 初始数据完整（13个司机、45个车牌、13种费用类型、1个管理员）
+  - ✅ RLS 策略已配置
+  - ✅ 存储桶已创建（app-a2kae62wkbnl_receipt_images）
+- 数据库连接信息已硬编码在 src/client/supabase.ts 中，不再依赖环境变量
