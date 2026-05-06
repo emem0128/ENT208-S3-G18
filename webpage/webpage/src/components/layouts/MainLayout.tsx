@@ -3,13 +3,16 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard, FileText, Table, Users, Truck,
-  Wallet, List, UserCog, ClipboardList, LogOut,
-  PanelLeftClose, PanelLeft,
+  Wallet, List, UserCog, ClipboardList, LogOut, ArrowLeftRight,
+  PanelLeftClose, PanelLeft, Map, FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useTranslation } from 'react-i18next';
+import i18n, { LANGUAGE_STORAGE_KEY } from '@/i18n';
 
 
 interface MainLayoutProps {
@@ -20,6 +23,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = React.useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('layout-sidebar-collapsed') === '1';
@@ -34,16 +38,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
+  const handleLanguageToggle = () => {
+    const nextLanguage = i18n.language === 'en' ? 'zh' : 'en';
+    void i18n.changeLanguage(nextLanguage);
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
+  };
+
+  const currentLanguageLabel = i18n.language === 'en' ? t('language.english') : t('language.chinese');
+
   const navItems = [
-    { path: '/', label: '数据看板', icon: LayoutDashboard },
-    { path: '/expenses', label: '报账管理', icon: FileText },
-    { path: '/summary', label: '总表', icon: Table },
-    { path: '/drivers', label: '司机管理', icon: Users },
-    { path: '/vehicles', label: '车辆管理', icon: Truck },
-    { path: '/advance-funds', label: '备用金', icon: Wallet },
-    { path: '/fee-types', label: '费用类型管理', icon: List },
-    ...(isAdmin ? [{ path: '/staff', label: '客服账号管理', icon: UserCog }] : []),
-    { path: '/logs', label: '操作日志', icon: ClipboardList },
+    { path: '/', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { path: '/expenses', label: t('nav.expenses'), icon: FileText },
+    { path: '/summary', label: t('nav.summary'), icon: Table },
+    { path: '/drivers', label: t('nav.drivers'), icon: Users },
+    { path: '/vehicles', label: t('nav.vehicles'), icon: Truck },
+    { path: '/vehicle-tracking', label: t('nav.vehicleTracking'), icon: Map },
+    { path: '/advance-funds', label: t('nav.advanceFunds'), icon: Wallet },
+    { path: '/fee-types', label: t('nav.feeTypes'), icon: List },
+    ...(isAdmin ? [{ path: '/staff', label: t('nav.staff'), icon: UserCog }] : []),
+    { path: '/logs', label: t('nav.logs'), icon: ClipboardList },
+    { path: '/legal', label: t('nav.legal'), icon: FileSpreadsheet },
   ];
 
   const NavItem = ({ path, label, icon: Icon }: { path: string; label: string; icon: any }) => {
@@ -85,20 +99,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     <TooltipProvider>
       <div className="h-screen flex overflow-hidden">
         <aside
-          className={cn("relative h-screen flex flex-col shrink-0 transition-all duration-300 overflow-visible", collapsed ? "w-14" : "w-52")}
+          className={cn("relative h-screen flex flex-col shrink-0 transition-all duration-300 overflow-visible", collapsed ? "w-14" : "w-[9.5rem]")}
           style={{ background: 'linear-gradient(180deg, #0f2a5e 0%, #1a3f8f 60%, #1e4da8 100%)' }}
         >
           <Button
             variant="ghost"
             size="icon"
             className={cn(
-              'absolute right-0 top-4 z-30 translate-x-full border-l-0 px-0 transition-all',
+              'absolute right-0 top-1/2 z-30 -translate-y-1/2 translate-x-full border-l-0 px-0 transition-all',
               collapsed
                 ? 'h-10 w-5 rounded-r-full rounded-l-none border border-[#7fb0ff] bg-[#0f2a5e] text-white shadow-[0_4px_10px_rgba(15,42,94,0.3)] hover:bg-[#1a3f8f]'
                 : 'h-9 w-4 rounded-r-full rounded-l-none border border-[#0f2a5e]/40 bg-white text-[#0f2a5e] shadow-[0_3px_8px_rgba(15,42,94,0.18)] hover:bg-[#eef3ff]'
             )}
             onClick={() => setCollapsed(!collapsed)}
-            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+            title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           >
             {collapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3 w-3" />}
           </Button>
@@ -112,7 +126,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               className="overflow-hidden whitespace-nowrap transition-all duration-300 flex-1"
               style={{ width: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
             >
-              <div className="text-white font-bold text-sm leading-tight">马上国际货运</div>
+              <div className="text-white font-bold text-sm leading-tight">{t('brand.short')}</div>
             </div>
           </div>
 
@@ -125,23 +139,43 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
           {/* 底部用户信息 */}
           <div className="border-t border-white/10 px-2 py-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-white/15 text-white text-xs font-semibold">
-                  {user?.name?.charAt(0) || '?'}
-                </AvatarFallback>
-              </Avatar>
-              <div
-                className="flex-1 overflow-hidden transition-all duration-300 px-1"
-                style={{ opacity: collapsed ? 0 : 1, maxWidth: collapsed ? 0 : 200 }}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg text-left transition-colors hover:bg-white/10',
+                    collapsed ? 'justify-center p-1.5' : 'px-1 py-1.5'
+                  )}
+                >
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-white/15 text-white text-xs font-semibold">
+                      {user?.name?.charAt(0) || '?'}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!collapsed && (
+                    <div className="min-w-0 flex-1 overflow-hidden px-1">
+                      <div className="truncate text-white text-xs font-medium">{user?.name}</div>
+                      <div className="truncate text-white/60 text-xs">{user?.role === 'admin' ? t('common.admin') : t('common.staff')}</div>
+                    </div>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align={collapsed ? 'center' : 'start'}
+                className="w-44"
               >
-                <div className="text-white text-xs font-medium whitespace-nowrap">{user?.name}</div>
-                <div className="text-white/60 text-xs whitespace-nowrap">{user?.role === 'admin' ? '管理员' : '普通客服'}</div>
-              </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10 shrink-0" onClick={handleLogout} title="退出登录">
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
+                <DropdownMenuItem onClick={handleLanguageToggle} className="justify-between">
+                  <span>{currentLanguageLabel}</span>
+                  <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout} className="justify-between">
+                  <span>{t('nav.logout')}</span>
+                  <LogOut className="h-4 w-4 text-muted-foreground" />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </aside>
 

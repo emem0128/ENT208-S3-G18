@@ -1,0 +1,6 @@
+vehicle_driver_documents.zip
+extracted/
+*_image_map.tsv
+last-run-report.json
+failures.tsv
+*.log

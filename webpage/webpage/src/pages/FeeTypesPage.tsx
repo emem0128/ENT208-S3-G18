@@ -12,8 +12,10 @@ import { getAllFeeTypes, createFeeType, updateFeeType, createOperationLog } from
 import type { FeeType } from '@/types/database';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const FeeTypesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [feeTypes, setFeeTypes] = useState<FeeType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +38,7 @@ const FeeTypesPage: React.FC = () => {
       setFeeTypes(data);
     } catch (error) {
       console.error('加载费用类型失败:', error);
-      toast.error('加载费用类型失败');
+      toast.error(t('toast.loadFeeTypesFailed'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +67,7 @@ const FeeTypesPage: React.FC = () => {
     if (!user) return;
 
     if (!formData.field_name || !formData.display_name) {
-      toast.error('请填写完整信息');
+      toast.error(t('toast.fillRequired'));
       return;
     }
 
@@ -83,7 +85,7 @@ const FeeTypesPage: React.FC = () => {
           target_id: editingFeeType.id,
           detail: `修改费用类型：${formData.display_name}`,
         });
-        toast.success('修改成功');
+        toast.success(t('toast.updateSuccess'));
       } else {
         const newFeeType = await createFeeType({
           ...formData,
@@ -97,13 +99,13 @@ const FeeTypesPage: React.FC = () => {
           target_id: newFeeType.id,
           detail: `新增费用类型：${formData.display_name}`,
         });
-        toast.success('新增成功');
+        toast.success(t('toast.createSuccess'));
       }
       setDialogOpen(false);
       loadFeeTypes();
     } catch (error) {
       console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -111,7 +113,7 @@ const FeeTypesPage: React.FC = () => {
     if (!user) return;
 
     if (feeType.field_name === 'other') {
-      toast.error('"其他"类型不可停用');
+      toast.error(t('feeTypes.otherCannotDisable'));
       return;
     }
 
@@ -125,11 +127,11 @@ const FeeTypesPage: React.FC = () => {
         target_id: feeType.id,
         detail: `${feeType.is_active ? '停用' : '启用'}费用类型：${feeType.display_name}`,
       });
-      toast.success(feeType.is_active ? '已停用' : '已启用');
+      toast.success(feeType.is_active ? t('toast.disabled') : t('toast.enabled'));
       loadFeeTypes();
     } catch (error) {
       console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -137,15 +139,15 @@ const FeeTypesPage: React.FC = () => {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">费用类型管理</h1>
+          <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('feeTypes.title')}</h1>
           <div className="flex items-center gap-2">
             <Button onClick={loadFeeTypes} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
-              刷新
+              {t('common.refresh')}
             </Button>
             <Button onClick={() => handleOpenDialog()} size="sm">
               <Plus className="h-4 w-4 mr-2" />
-              新增费用类型
+              {t('feeTypes.add')}
             </Button>
           </div>
         </div>
@@ -153,23 +155,23 @@ const FeeTypesPage: React.FC = () => {
         <Card>
           <CardContent className="pt-6">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+              <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>字段名</TableHead>
-                    <TableHead>显示名</TableHead>
-                    <TableHead>排序</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>操作</TableHead>
+                    <TableHead>{t('common.fieldName')}</TableHead>
+                    <TableHead>{t('common.displayName')}</TableHead>
+                    <TableHead>{t('common.sortOrder')}</TableHead>
+                    <TableHead>{t('common.status')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {feeTypes.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -181,11 +183,11 @@ const FeeTypesPage: React.FC = () => {
                         <TableCell>
                           {feeType.is_active ? (
                             <Badge variant="outline" className="bg-success/10 text-success border-success">
-                              启用
+                              {t('common.enabled')}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="bg-muted text-muted-foreground">
-                              停用
+                              {t('common.disabled')}
                             </Badge>
                           )}
                         </TableCell>
@@ -197,7 +199,7 @@ const FeeTypesPage: React.FC = () => {
                               onClick={() => handleOpenDialog(feeType)}
                             >
                               <Edit className="h-4 w-4 mr-1" />
-                              编辑
+                              {t('common.edit')}
                             </Button>
                             <Button
                               size="sm"
@@ -206,7 +208,7 @@ const FeeTypesPage: React.FC = () => {
                               disabled={feeType.field_name === 'other'}
                             >
                               <Power className="h-4 w-4 mr-1" />
-                              {feeType.is_active ? '停用' : '启用'}
+                              {feeType.is_active ? t('common.disabled') : t('common.enabled')}
                             </Button>
                           </div>
                         </TableCell>
@@ -220,11 +222,11 @@ const FeeTypesPage: React.FC = () => {
         </Card>
 
         <div className="text-sm text-muted-foreground">
-          <p>注意：</p>
+          <p>{t('feeTypes.note')}</p>
           <ul className="list-disc list-inside space-y-1 mt-2">
-            <li>字段名创建后不可修改</li>
-            <li>"其他"类型不可停用或删除</li>
-            <li>新增费用类型后，需要在数据库中添加对应字段才能使用</li>
+            <li>{t('feeTypes.fieldImmutable')}</li>
+            <li>{t('feeTypes.otherProtected')}</li>
+            <li>{t('feeTypes.dbFieldRequired')}</li>
           </ul>
         </div>
       </div>
@@ -233,47 +235,47 @@ const FeeTypesPage: React.FC = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingFeeType ? '编辑费用类型' : '新增费用类型'}</DialogTitle>
+            <DialogTitle>{editingFeeType ? t('feeTypes.edit') : t('feeTypes.add')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>字段名（英文）</Label>
+              <Label>{t('feeTypes.fieldNameEn')}</Label>
               <Input
                 value={formData.field_name}
                 onChange={(e) => setFormData({ ...formData, field_name: e.target.value })}
-                placeholder="例如：fee_example"
+                placeholder={t('feeTypes.fieldPlaceholder')}
                 disabled={!!editingFeeType}
               />
               {!editingFeeType && (
                 <p className="text-xs text-muted-foreground">
-                  字段名创建后不可修改，建议使用 fee_ 开头
+                  {t('feeTypes.fieldImmutableHint')}
                 </p>
               )}
             </div>
             <div className="space-y-2">
-              <Label>显示名（中文）</Label>
+              <Label>{t('feeTypes.displayNameZh')}</Label>
               <Input
                 value={formData.display_name}
                 onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-                placeholder="例如：示例费用"
+                placeholder={t('feeTypes.displayPlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label>排序号</Label>
+              <Label>{t('common.sortOrder')}</Label>
               <Input
                 type="number"
                 value={formData.sort_order}
                 onChange={(e) => setFormData({ ...formData, sort_order: Number(e.target.value) })}
-                placeholder="数字越小越靠前"
+                placeholder={t('feeTypes.sortPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSubmit}>
-              {editingFeeType ? '保存' : '新增'}
+              {editingFeeType ? t('common.save') : t('common.add')}
             </Button>
           </DialogFooter>
         </DialogContent>

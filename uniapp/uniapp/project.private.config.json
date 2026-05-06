@@ -3,7 +3,9 @@
   "projectname": "uniapp",
   "setting": {
     "compileHotReLoad": true,
-    "urlCheck": true,
+    "urlCheck": false,
+    "minified": true,
+    "lazyCodeLoading": "requiredComponents",
     "coverView": false,
     "lazyloadPlaceholderEnable": false,
     "skylineRenderEnable": false,

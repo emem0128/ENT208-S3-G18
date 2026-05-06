@@ -1,12 +1,13 @@
 // 报账记录编辑页
-import {View, Text, Input, Textarea, Image, Button, ScrollView, Picker} from '@tarojs/components'
-import {useState, useEffect, useCallback} from 'react'
+import {Button, Image, Input, Picker, ScrollView, Text, Textarea, View} from '@tarojs/components'
 import Taro, {useDidShow} from '@tarojs/taro'
-import {withRouteGuard} from '@/components/RouteGuard'
-import type {ExpenseRecord, FeeType, FeeItem, UploadFileInput} from '@/db/types'
-import {getExpenseRecordById, updateExpenseRecord, getFeeTypes, checkVehicleExists} from '@/db/api'
-import {chooseImages, uploadFiles, getImageUrl} from '@/utils/upload'
+import {useCallback, useEffect, useState} from 'react'
 import FeeRow from '@/components/FeeRow'
+import {withRouteGuard} from '@/components/RouteGuard'
+import {checkVehicleExists, fetchOtherFees, getExpenseRecordById, getFeeTypes, updateExpenseRecord} from '@/db/api'
+import type {ExpenseRecord, FeeItem, FeeType, OtherFeeItem, UploadFileInput} from '@/db/types'
+import {parseFeeLocationDetail} from '@/utils/feeLocation'
+import {chooseImages, getImageUrl, uploadFiles} from '@/utils/upload'
 
 function RecordEdit() {
   const [record, setRecord] = useState<ExpenseRecord | null>(null)
@@ -32,7 +33,8 @@ function RecordEdit() {
       return
     }
 
-    const {data: recordData} = await getExpenseRecordById(Number(id))
+    const recordId = Number(id)
+    const {data: recordData} = await getExpenseRecordById(recordId)
     if (!recordData) {
       Taro.showToast({
         title: '记录不存在',
@@ -56,7 +58,6 @@ function RecordEdit() {
     setRecordDate(recordData.record_date || '')
     setPlateNumber(recordData.plate_number)
     setRoute(recordData.route || '')
-    setNote(recordData.note_detail || '')
     setExistingImages(recordData.receipt_images || [])
 
     // 构建费用项
@@ -76,30 +77,16 @@ function RecordEdit() {
       {field: 'fee_stamp', name: '盖章'}
     ]
 
-    // 解析 note_detail，提取各费用的备注
-    // 格式：停车费(北投):35; 停车费(桂福):20; 其他名称:金额
+    // 解析 fee_location_detail，提取正常费用的地点备注
+    // 格式：停车费(北投):35; 过磅费(桂福):10
     const noteMap: Record<string, string[]> = {} // field_name -> [note, note, ...]
-    let otherNoteDetail = ''
+    const locationMap = parseFeeLocationDetail(recordData.fee_location_detail)
+    Object.entries(locationMap).forEach(([displayName, items]) => {
+      const found = feeFields.find((f) => f.name === displayName)
+      if (!found) return
 
-    if (recordData.note_detail) {
-      const parts = recordData.note_detail.split(';').map((s) => s.trim()).filter(Boolean)
-      for (const part of parts) {
-        // 匹配 "费用名(备注):金额" 格式
-        const match = part.match(/^(.+?)\((.+?)\):\d+(\.\d+)?$/)
-        if (match) {
-          const displayName = match[1].trim()
-          const noteText = match[2].trim()
-          const found = feeFields.find((f) => f.name === displayName)
-          if (found) {
-            if (!noteMap[found.field]) noteMap[found.field] = []
-            noteMap[found.field].push(noteText)
-          }
-        } else {
-          // 不匹配的归入 other 备注
-          otherNoteDetail = otherNoteDetail ? `${otherNoteDetail}; ${part}` : part
-        }
-      }
-    }
+      noteMap[found.field] = items.map((item) => item.location)
+    })
 
     for (const {field, name} of feeFields) {
       const amount = recordData[field as keyof ExpenseRecord] as number
@@ -128,17 +115,54 @@ function RecordEdit() {
       }
     }
 
-    if (recordData.note_amount > 0) {
+    // 解析 note_detail，提取 other 费用描述
+    // 格式：修车费:333; 补胎:60
+    const {data: fetchedOtherFees} = await fetchOtherFees(recordId)
+    const otherItems: FeeItem[] = []
+
+    if (fetchedOtherFees.length > 0) {
+      fetchedOtherFees.forEach((item) => {
+        otherItems.push({
+          id: `other_${item.id || Date.now()}_${Math.random()}`,
+          field_name: 'other',
+          display_name: '其他',
+          amount: Number(item.amount) || 0,
+          note: item.name
+        })
+      })
+    } else if (recordData.note_detail) {
+      const parts = recordData.note_detail.split(';').map((s) => s.trim()).filter(Boolean)
+      for (const part of parts) {
+        const match = part.match(/^(.+?):(-?\d+(\.\d+)?)$/)
+        if (!match) continue
+        const otherName = match[1].trim()
+        const otherAmount = Number.parseFloat(match[2])
+        if (!otherName || Number.isNaN(otherAmount)) continue
+        otherItems.push({
+          id: `fee_${Date.now()}_${Math.random()}`,
+          field_name: 'other',
+          display_name: '其他',
+          amount: otherAmount,
+          note: otherName
+        })
+      }
+    }
+
+    if (otherItems.length > 0) {
+      items.push(...otherItems)
+    } else if (recordData.note_amount > 0) {
+      // 向后兼容旧数据：只有 note_amount，没有可解析的 note_detail
       items.push({
         id: `fee_${Date.now()}_${Math.random()}`,
         field_name: 'other',
         display_name: '其他',
         amount: recordData.note_amount,
-        note: otherNoteDetail || recordData.note_detail || ''
+        note: ''
       })
     }
 
     setFeeItems(items)
+    setNote('')
 
     const {data: types} = await getFeeTypes()
     setFeeTypes(types)
@@ -162,14 +186,24 @@ function RecordEdit() {
     setFeeItems([...feeItems, newItem])
   }
 
-  const updateFeeItem = (index: number, item: FeeItem) => {
-    const newItems = [...feeItems]
-    newItems[index] = item
+  const addOtherFeeItem = () => {
+    const newItem: FeeItem = {
+      id: `other_${Date.now()}_${Math.random()}`,
+      field_name: 'other',
+      display_name: '其他',
+      amount: 0,
+      note: ''
+    }
+    setFeeItems([...feeItems, newItem])
+  }
+
+  const updateFeeItem = (itemId: string, item: FeeItem) => {
+    const newItems = feeItems.map((fee) => (fee.id === itemId ? item : fee))
     setFeeItems(newItems)
   }
 
-  const deleteFeeItem = (index: number) => {
-    const newItems = feeItems.filter((_, i) => i !== index)
+  const deleteFeeItem = (itemId: string) => {
+    const newItems = feeItems.filter((item) => item.id !== itemId)
     setFeeItems(newItems)
   }
 
@@ -296,19 +330,22 @@ function RecordEdit() {
 
       // 构建费用数据
       const feeMap: Record<string, number> = {}
-      let noteAmount = 0
-      const noteDetails: string[] = []
+      const feeLocationDetails: string[] = []
+      const otherFees: OtherFeeItem[] = []
 
       for (const item of feeItems) {
         if (item.field_name === 'other') {
-          noteAmount += item.amount
-          if (item.note) {
-            noteDetails.push(`${item.note}:${item.amount}`)
+          if (item.note?.trim()) {
+            otherFees.push({
+              name: item.note.trim(),
+              amount: item.amount,
+              sort_order: otherFees.length
+            })
           }
         } else {
           feeMap[item.field_name] = (feeMap[item.field_name] || 0) + item.amount
           if (item.note?.trim()) {
-            noteDetails.push(`${item.display_name}(${item.note.trim()}):${item.amount}`)
+            feeLocationDetails.push(`${item.display_name}(${item.note.trim()}):${item.amount}`)
           }
         }
       }
@@ -331,8 +368,10 @@ function RecordEdit() {
         fee_tarpaulin: feeMap.fee_tarpaulin || 0,
         fee_highway: feeMap.fee_highway || 0,
         fee_stamp: feeMap.fee_stamp || 0,
-        note_amount: noteAmount,
-        note_detail: noteDetails.length > 0 ? noteDetails.join('; ') : note || null,
+        note_amount: otherFees.reduce((sum, item) => sum + item.amount, 0),
+        fee_location_detail: feeLocationDetails.length > 0 ? feeLocationDetails.join('; ') : null,
+        note_detail: otherFees.length > 0 ? otherFees.map((item) => `${item.name}:${item.amount}`).join('; ') : null,
+        other_fees: otherFees,
         total_expense: totalExpense,
         receipt_images: allImages.length > 0 ? allImages : null
       }
@@ -375,6 +414,10 @@ function RecordEdit() {
     )
   }
 
+  const normalFeeItems = feeItems.filter((item) => item.field_name !== 'other')
+  const otherFeeItems = feeItems.filter((item) => item.field_name === 'other')
+  const normalFeeTypes = feeTypes.filter((item) => item.field_name !== 'other')
+
   return (
     <View className="min-h-screen bg-gradient-subtle">
       <ScrollView className="w-full" scrollY>
@@ -415,16 +458,18 @@ function RecordEdit() {
               </View>
 
               <View className="flex flex-col space-y-3">
-                <Text className="text-xl text-foreground font-medium">费用明细</Text>
-                {feeItems.map((item, index) => (
-                  <FeeRow
-                    key={item.id}
-                    feeItem={item}
-                    feeTypes={feeTypes}
-                    onChange={(newItem) => updateFeeItem(index, newItem)}
-                    onDelete={() => deleteFeeItem(index)}
-                  />
-                ))}
+                <Text className="text-xl text-foreground font-medium">普通费用</Text>
+                <View className="flex flex-col gap-2">
+                  {normalFeeItems.map((item) => (
+                    <FeeRow
+                      key={item.id}
+                      feeItem={item}
+                      feeTypes={normalFeeTypes}
+                      onChange={(newItem) => updateFeeItem(item.id, newItem)}
+                      onDelete={() => deleteFeeItem(item.id)}
+                    />
+                  ))}
+                </View>
                 <View
                   className="flex flex-row items-center justify-center py-3 bg-muted rounded-xl"
                   onClick={addFeeItem}>
@@ -433,11 +478,59 @@ function RecordEdit() {
                 </View>
               </View>
 
+              <View className="flex flex-col space-y-3 border-t border-border/60 pt-4">
+                <Text className="text-xl text-foreground font-medium">其他费用</Text>
+                <View className="flex flex-col gap-2">
+                  {otherFeeItems.map((item) => (
+                    <View key={item.id} className="flex flex-row items-center gap-3">
+                      <View className="min-w-0 basis-3/5 bg-input rounded-xl border border-border px-4 py-4">
+                        <Input
+                          className="w-full text-foreground text-xl"
+                          placeholder="请输入费用名称"
+                          value={item.note || ''}
+                          onInput={(e) =>
+                            updateFeeItem(item.id, {
+                              ...item,
+                              note: e.detail.value
+                            })
+                          }
+                        />
+                      </View>
+                      <View className="basis-2/5 bg-input rounded-xl border border-border px-4 py-4">
+                        <Input
+                          className="w-full text-right text-foreground text-xl"
+                          type="digit"
+                          placeholder="金额"
+                          value={item.amount > 0 ? String(item.amount) : ''}
+                          onInput={(e) =>
+                            updateFeeItem(item.id, {
+                              ...item,
+                              amount: e.detail.value ? Number.parseFloat(e.detail.value) : 0
+                            })
+                          }
+                        />
+                      </View>
+                      <View
+                        className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full bg-destructive/10"
+                        onClick={() => deleteFeeItem(item.id)}>
+                        <View className="i-mdi-close text-destructive text-2xl" />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+                <View
+                  className="flex flex-row items-center justify-center py-3 rounded-xl border border-dashed border-emerald-500/60 bg-emerald-500/5"
+                  onClick={addOtherFeeItem}>
+                  <View className="i-mdi-plus-circle text-emerald-600 text-2xl mr-2" />
+                  <Text className="text-xl text-emerald-600 font-medium">添加其他费用</Text>
+                </View>
+              </View>
+
               <View className="flex flex-col space-y-2">
                 <Text className="text-xl text-foreground font-medium">凭证图片（选填，最多9张）</Text>
                 <View className="flex flex-row flex-wrap gap-3">
                   {existingImages.map((img, index) => (
-                    <View key={`existing_${index}`} className="relative w-24 h-24">
+                    <View key={img} className="relative w-24 h-24">
                       <Image
                         src={getImageUrl(img)}
                         className="w-full h-full rounded-xl"
@@ -452,7 +545,7 @@ function RecordEdit() {
                     </View>
                   ))}
                   {receiptImages.map((img, index) => (
-                    <View key={`new_${index}`} className="relative w-24 h-24">
+                    <View key={img.path} className="relative w-24 h-24">
                       <Image
                         src={img.path}
                         className="w-full h-full rounded-xl"

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if ! command -v ast-grep >/dev/null 2>&1; then
+    echo "Skipping auth provider check: ast-grep is not installed."
+    exit 0
+fi
+
 auth_provider_output=$(ast-grep scan -r .rules/noNestedRouteGuard.yml 2>/dev/null)
 
 if [ -z "$auth_provider_output" ]; then

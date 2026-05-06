@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# dependencies
+node_modules/
+
+# build artifacts
+dist/
+output/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# runtime/temp
+.cache/
+.swc/
+coverage/

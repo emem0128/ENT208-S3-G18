@@ -1,10 +1,14 @@
 // 图片上传工具函数
 import Taro from '@tarojs/taro'
-import {supabase} from '@/client/supabase'
+import {SUPABASE_ANON_KEY, SUPABASE_URL, supabase} from '@/client/supabase'
 import type {UploadFileInput} from '@/db/types'
 
 const BUCKET_NAME = 'receipt-images'
-const MAX_FILE_SIZE = 1024 * 1024 // 1MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+
+function isWeappEnv(): boolean {
+  return Taro.getEnv() === Taro.ENV_TYPE.WEAPP
+}
 
 /**
  * 压缩图片
@@ -44,7 +48,7 @@ export async function uploadFile(file: UploadFileInput): Promise<{
     let filePath = file.path
     let fileSize = file.size
 
-    // 如果文件超过1MB，进行压缩
+    // 如果文件超过5MB，尽量压缩；压缩后仍超限也继续上传，交给服务端判断
     if (fileSize > MAX_FILE_SIZE) {
       let quality = 80
       while (quality > 20) {
@@ -68,16 +72,38 @@ export async function uploadFile(file: UploadFileInput): Promise<{
       }
 
       if (fileSize > MAX_FILE_SIZE) {
-        return {
-          success: false,
-          error: '图片压缩后仍超过1MB，请选择更小的图片'
-        }
+        console.warn('图片压缩后仍超过5MB，继续尝试上传:', fileSize)
       }
     }
 
     const fileName = generateFileName(file.name)
 
-    // H5 环境使用 originalFileObj，小程序环境使用 tempFilePath
+    if (isWeappEnv()) {
+      const uploadResult = await Taro.uploadFile({
+        url: `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${fileName}`,
+        filePath,
+        name: 'file',
+        header: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY
+        }
+      })
+
+      if (uploadResult.statusCode < 200 || uploadResult.statusCode >= 300) {
+        console.error('上传文件失败:', uploadResult)
+        return {
+          success: false,
+          error: uploadResult.data || '上传失败'
+        }
+      }
+
+      return {
+        success: true,
+        url: `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`
+      }
+    }
+
+    // H5 环境保持 Supabase SDK 上传逻辑
     const fileContent = file.originalFileObj || ({tempFilePath: filePath} as any)
 
     const {data, error} = await supabase.storage.from(BUCKET_NAME).upload(fileName, fileContent)

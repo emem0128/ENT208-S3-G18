@@ -15,8 +15,10 @@ import type { ServiceStaff } from '@/types/database';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const StaffPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [staff, setStaff] = useState<ServiceStaff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ const StaffPage: React.FC = () => {
       setStaff(data);
     } catch (error) {
       console.error('加载客服列表失败:', error);
-      toast.error('加载客服列表失败');
+      toast.error(t('toast.loadStaffFailed'));
     } finally {
       setLoading(false);
     }
@@ -73,7 +75,7 @@ const StaffPage: React.FC = () => {
     if (!user) return;
 
     if (!formData.name || !formData.username) {
-      toast.error('请填写完整信息');
+      toast.error(t('toast.fillRequired'));
       return;
     }
 
@@ -95,7 +97,7 @@ const StaffPage: React.FC = () => {
           target_id: editingStaff.id,
           detail: `修改客服信息：${formData.name}`,
         });
-        toast.success('修改成功');
+        toast.success(t('toast.updateSuccess'));
       } else {
         const newStaff = await createServiceStaff({
           name: formData.name,
@@ -111,13 +113,13 @@ const StaffPage: React.FC = () => {
           target_id: newStaff.id,
           detail: `新增客服：${formData.name}`,
         });
-        toast.success('新增成功');
+        toast.success(t('toast.createSuccess'));
       }
       setDialogOpen(false);
       loadStaff();
     } catch (error) {
       console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -125,7 +127,7 @@ const StaffPage: React.FC = () => {
     if (!user || !deleteStaff) return;
 
     if (deleteStaff.id === user.id) {
-      toast.error('不能删除自己');
+      toast.error(t('staff.cannotDeleteSelf'));
       return;
     }
 
@@ -139,33 +141,33 @@ const StaffPage: React.FC = () => {
         target_id: deleteStaff.id,
         detail: `删除客服：${deleteStaff.name}`,
       });
-      toast.success('删除成功');
+      toast.success(t('toast.deleteSuccess'));
       setDeleteDialogOpen(false);
       setDeleteStaff(null);
       loadStaff();
     } catch (error) {
       console.error('删除失败:', error);
-      toast.error('删除失败，请重试');
+      toast.error(t('toast.deleteFailed'));
     }
   };
 
   const getRoleName = (role: string) => {
-    return role === 'admin' ? '管理员' : '普通客服';
+    return role === 'admin' ? t('common.admin') : t('common.staff');
   };
 
   return (
     <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">客服账号管理</h1>
+          <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('staff.title')}</h1>
           <div className="flex items-center gap-2">
             <Button onClick={loadStaff} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
-              刷新
+              {t('common.refresh')}
             </Button>
             <Button onClick={() => handleOpenDialog()} size="sm">
               <Plus className="h-4 w-4 mr-2" />
-              新增客服
+              {t('staff.add')}
             </Button>
           </div>
         </div>
@@ -173,23 +175,23 @@ const StaffPage: React.FC = () => {
         <Card>
           <CardContent className="pt-6">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+              <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>姓名</TableHead>
-                    <TableHead>账号</TableHead>
-                    <TableHead>角色</TableHead>
-                    <TableHead>创建时间</TableHead>
-                    <TableHead>操作</TableHead>
+                    <TableHead>{t('common.name')}</TableHead>
+                    <TableHead>{t('common.username')}</TableHead>
+                    <TableHead>{t('common.role')}</TableHead>
+                    <TableHead>{t('common.createdAt')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {staff.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -200,10 +202,10 @@ const StaffPage: React.FC = () => {
                         <TableCell>
                           {staffMember.role === 'admin' ? (
                             <Badge variant="outline" className="bg-primary/10 text-primary border-primary">
-                              管理员
+                              {t('common.admin')}
                             </Badge>
                           ) : (
-                            <Badge variant="outline">普通客服</Badge>
+                            <Badge variant="outline">{t('common.staff')}</Badge>
                           )}
                         </TableCell>
                         <TableCell>{format(new Date(staffMember.created_at), 'yyyy-MM-dd')}</TableCell>
@@ -215,7 +217,7 @@ const StaffPage: React.FC = () => {
                               onClick={() => handleOpenDialog(staffMember)}
                             >
                               <Edit className="h-4 w-4 mr-1" />
-                              编辑
+                              {t('common.edit')}
                             </Button>
                             <Button
                               size="sm"
@@ -227,7 +229,7 @@ const StaffPage: React.FC = () => {
                               disabled={staffMember.id === user?.id}
                             >
                               <Trash2 className="h-4 w-4 mr-1" />
-                              删除
+                              {t('common.delete')}
                             </Button>
                           </div>
                         </TableCell>
@@ -245,50 +247,50 @@ const StaffPage: React.FC = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingStaff ? '编辑客服' : '新增客服'}</DialogTitle>
+            <DialogTitle>{editingStaff ? t('staff.edit') : t('staff.add')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>姓名</Label>
+              <Label>{t('common.name')}</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="请输入姓名"
+                placeholder={t('common.inputName')}
               />
             </div>
             <div className="space-y-2">
-              <Label>账号</Label>
+              <Label>{t('common.username')}</Label>
               <Input
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                placeholder="请输入账号"
+                placeholder={t('common.inputUsername')}
                 disabled={!!editingStaff}
               />
             </div>
             {!editingStaff && (
               <div className="space-y-2">
-                <Label>密码</Label>
+                <Label>{t('common.password')}</Label>
                 <Input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="默认密码：123456"
+                  placeholder={t('common.defaultPassword')}
                 />
               </div>
             )}
             {editingStaff && (
               <div className="space-y-2">
-                <Label>新密码（留空则不修改）</Label>
+                <Label>{t('common.newPassword')}</Label>
                 <Input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="留空则不修改密码"
+                  placeholder={t('common.leavePasswordBlank')}
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label>角色</Label>
+              <Label>{t('common.role')}</Label>
               <Select
                 value={formData.role}
                 onValueChange={(value: 'admin' | 'staff') => setFormData({ ...formData, role: value })}
@@ -297,18 +299,18 @@ const StaffPage: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">管理员</SelectItem>
-                  <SelectItem value="staff">普通客服</SelectItem>
+                  <SelectItem value="admin">{t('common.admin')}</SelectItem>
+                  <SelectItem value="staff">{t('common.staff')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSubmit}>
-              {editingStaff ? '保存' : '新增'}
+              {editingStaff ? t('common.save') : t('common.add')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -318,14 +320,14 @@ const StaffPage: React.FC = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除客服 {deleteStaff?.name} 吗？此操作不可恢复。
+              {t('staff.deleteDescription', { name: deleteStaff?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>确认删除</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -14,8 +14,10 @@ import type { AdvanceFundStats, Driver, AdvanceFundRecordWithDriver } from '@/ty
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const AdvanceFundsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [stats, setStats] = useState<AdvanceFundStats[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -48,7 +50,7 @@ const AdvanceFundsPage: React.FC = () => {
       setDrivers(driverList);
     } catch (error) {
       console.error('加载司机列表失败:', error);
-      toast.error('加载司机列表失败');
+      toast.error(t('toast.loadDriversFailed'));
     }
   };
 
@@ -63,7 +65,7 @@ const AdvanceFundsPage: React.FC = () => {
       }
     } catch (error) {
       console.error('加载备用金数据失败:', error);
-      toast.error('加载备用金数据失败');
+      toast.error(t('advanceFunds.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -83,7 +85,7 @@ const AdvanceFundsPage: React.FC = () => {
     if (!user || !selectedDriver) return;
 
     if (!rechargeForm.amount || Number(rechargeForm.amount) <= 0) {
-      toast.error('请输入有效的充值金额');
+      toast.error(t('advanceFunds.invalidAmount'));
       return;
     }
 
@@ -108,12 +110,12 @@ const AdvanceFundsPage: React.FC = () => {
         detail: `为 ${selectedDriver.name} 充值备用金 ¥${rechargeForm.amount}`,
       });
 
-      toast.success('充值成功');
+      toast.success(t('advanceFunds.rechargeSuccess'));
       setRechargeDialogOpen(false);
       loadStats();
     } catch (error) {
       console.error('充值失败:', error);
-      toast.error('充值失败，请重试');
+      toast.error(t('advanceFunds.rechargeFailed'));
     }
   };
 
@@ -128,7 +130,7 @@ const AdvanceFundsPage: React.FC = () => {
       setDetailDialogOpen(true);
     } catch (error) {
       console.error('加载明细失败:', error);
-      toast.error('加载明细失败');
+      toast.error(t('advanceFunds.loadDetailFailed'));
     }
   };
 
@@ -146,7 +148,7 @@ const AdvanceFundsPage: React.FC = () => {
         detail: `删除备用金充值记录：¥${deleteRecord.amount}`,
       });
 
-      toast.success('删除成功');
+      toast.success(t('toast.deleteSuccess'));
       setDeleteDialogOpen(false);
       setDeleteRecord(null);
       
@@ -162,7 +164,7 @@ const AdvanceFundsPage: React.FC = () => {
       loadStats();
     } catch (error) {
       console.error('删除失败:', error);
-      toast.error('删除失败，请重试');
+      toast.error(t('toast.deleteFailed'));
     }
   };
 
@@ -175,14 +177,23 @@ const AdvanceFundsPage: React.FC = () => {
     return { totalRecharge, totalExpense, balance };
   };
 
+  const getMonthRange = () => {
+    const [year, mon] = month.split('-').map(Number);
+    const lastDay = new Date(year, mon, 0).getDate();
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+    return { monthStart, monthEnd };
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">备用金管理</h1>
+          <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('advanceFunds.title')}</h1>
           <Button onClick={loadStats} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
-            刷新
+            {t('common.refresh')}
           </Button>
         </div>
 
@@ -191,7 +202,7 @@ const AdvanceFundsPage: React.FC = () => {
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>月份</Label>
+                <Label>{t('common.month')}</Label>
                 <input
                   type="month"
                   value={month}
@@ -200,13 +211,13 @@ const AdvanceFundsPage: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>司机</Label>
+                <Label>{t('common.driver')}</Label>
                 <Select value={driverId || 'all'} onValueChange={(value) => setDriverId(value === 'all' ? '' : value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="全部司机" />
+                    <SelectValue placeholder={t('common.allDrivers')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">全部司机</SelectItem>
+                    <SelectItem value="all">{t('common.allDrivers')}</SelectItem>
                     {drivers.map((driver) => (
                       <SelectItem key={driver.id} value={driver.id.toString()}>
                         {driver.name}
@@ -222,27 +233,27 @@ const AdvanceFundsPage: React.FC = () => {
         {/* 各司机备用金概览表格 */}
         <Card>
           <CardHeader>
-            <CardTitle>各司机备用金概览</CardTitle>
+            <CardTitle>{t('advanceFunds.overview')}</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+              <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>司机</TableHead>
-                    <TableHead className="text-right">充值合计</TableHead>
-                    <TableHead className="text-right">支出合计（已确认）</TableHead>
-                    <TableHead className="text-right">余额</TableHead>
-                    <TableHead>操作</TableHead>
+                    <TableHead>{t('common.driver')}</TableHead>
+                    <TableHead className="text-right">{t('advanceFunds.rechargeTotal')}</TableHead>
+                    <TableHead className="text-right">{t('advanceFunds.confirmedExpense')}</TableHead>
+                    <TableHead className="text-right">{t('advanceFunds.balance')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {stats.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -265,7 +276,7 @@ const AdvanceFundsPage: React.FC = () => {
                                 onClick={() => handleOpenRechargeDialog(driver)}
                               >
                                 <Plus className="h-4 w-4 mr-1" />
-                                充值
+                                {t('advanceFunds.recharge')}
                               </Button>
                               <Button
                                 size="sm"
@@ -273,7 +284,7 @@ const AdvanceFundsPage: React.FC = () => {
                                 onClick={() => handleOpenDetailDialog(driver)}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                明细
+                                {t('common.details')}
                               </Button>
                             </div>
                           </TableCell>
@@ -292,21 +303,21 @@ const AdvanceFundsPage: React.FC = () => {
       <Dialog open={rechargeDialogOpen} onOpenChange={setRechargeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>充值备用金 - {selectedDriver?.name}</DialogTitle>
+            <DialogTitle>{t('advanceFunds.rechargeDialog', { name: selectedDriver?.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>充值金额</Label>
+              <Label>{t('advanceFunds.rechargeAmount')}</Label>
               <Input
                 type="number"
                 step="0.01"
                 value={rechargeForm.amount}
                 onChange={(e) => setRechargeForm({ ...rechargeForm, amount: e.target.value })}
-                placeholder="请输入充值金额"
+                placeholder={t('advanceFunds.inputRechargeAmount')}
               />
             </div>
             <div className="space-y-2">
-              <Label>充值日期</Label>
+              <Label>{t('advanceFunds.rechargeDate')}</Label>
               <Input
                 type="date"
                 value={rechargeForm.fund_date}
@@ -314,19 +325,19 @@ const AdvanceFundsPage: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>备注（选填）</Label>
+              <Label>{t('common.optionalRemarks')}</Label>
               <Input
                 value={rechargeForm.note}
                 onChange={(e) => setRechargeForm({ ...rechargeForm, note: e.target.value })}
-                placeholder="请输入备注"
+                placeholder={t('common.remarks')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRechargeDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
-            <Button onClick={handleRecharge}>确认充值</Button>
+            <Button onClick={handleRecharge}>{t('common.confirm')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -335,31 +346,31 @@ const AdvanceFundsPage: React.FC = () => {
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>备用金明细 - {selectedDriver?.name}</DialogTitle>
+            <DialogTitle>{t('advanceFunds.detailDialog', { name: selectedDriver?.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>日期</TableHead>
-                  <TableHead>类型</TableHead>
-                  <TableHead className="text-right">金额</TableHead>
-                  <TableHead>备注</TableHead>
-                  <TableHead>操作</TableHead>
+                  <TableHead>{t('common.date')}</TableHead>
+                  <TableHead>{t('common.type')}</TableHead>
+                  <TableHead className="text-right">{t('common.amount')}</TableHead>
+                  <TableHead>{t('common.remarks')}</TableHead>
+                  <TableHead>{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {detailRecords.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      暂无充值记录
+                      {t('advanceFunds.noRechargeRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   detailRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>{format(new Date(record.fund_date), 'yyyy-MM-dd')}</TableCell>
-                      <TableCell>充值</TableCell>
+                      <TableCell>{t('advanceFunds.recharge')}</TableCell>
                       <TableCell className="text-right">¥{Number(record.amount).toFixed(2)}</TableCell>
                       <TableCell>{record.note || '-'}</TableCell>
                       <TableCell>
@@ -372,7 +383,7 @@ const AdvanceFundsPage: React.FC = () => {
                           }}
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          删除
+                          {t('common.delete')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -383,21 +394,23 @@ const AdvanceFundsPage: React.FC = () => {
 
             <div className="border-t pt-4 space-y-2">
               <div className="flex justify-between">
-                <span className="font-medium">充值合计：</span>
+                <span className="font-medium">{t('advanceFunds.rechargeTotal')}：</span>
                 <span className="font-bold">¥{getDetailStats().totalRecharge.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-medium">本月支出（已确认）：</span>
+                <span className="font-medium">
+                  {t('advanceFunds.expenseConfirmedInRange', getMonthRange())}
+                </span>
                 <span className="font-bold">¥{getDetailStats().totalExpense.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-lg">
-                <span className="font-semibold">余额：</span>
+                <span className="font-semibold">{t('advanceFunds.balance')}：</span>
                 <span className="font-bold text-primary">¥{getDetailStats().balance.toFixed(2)}</span>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setDetailDialogOpen(false)}>关闭</Button>
+            <Button onClick={() => setDetailDialogOpen(false)}>{t('common.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -406,14 +419,14 @@ const AdvanceFundsPage: React.FC = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除这条充值记录吗？金额：¥{deleteRecord?.amount}
+              {t('advanceFunds.deleteDescription', { amount: deleteRecord?.amount })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>确认删除</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -11,8 +11,10 @@ import { getOperationLogs, getAllServiceStaff } from '@/db/api';
 import type { OperationLog, ServiceStaff } from '@/types/database';
 import { format, subDays } from 'date-fns';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 const LogsPage: React.FC = () => {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [staff, setStaff] = useState<ServiceStaff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ const LogsPage: React.FC = () => {
       setStaff(data);
     } catch (error) {
       console.error('加载客服列表失败:', error);
-      toast.error('加载客服列表失败');
+      toast.error(t('toast.loadStaffFailed'));
     }
   };
 
@@ -54,7 +56,7 @@ const LogsPage: React.FC = () => {
       setLogs(data);
     } catch (error) {
       console.error('加载操作日志失败:', error);
-      toast.error('加载操作日志失败');
+      toast.error(t('toast.loadLogsFailed'));
     } finally {
       setLoading(false);
     }
@@ -62,23 +64,23 @@ const LogsPage: React.FC = () => {
 
   const getActionName = (action: string) => {
     const actionMap: Record<string, string> = {
-      confirm: '确认报账',
-      edit: '修改',
-      create: '新增',
-      update: '更新',
-      delete: '删除',
+      confirm: t('logs.actions.confirm'),
+      edit: t('logs.actions.edit'),
+      create: t('logs.actions.create'),
+      update: t('logs.actions.update'),
+      delete: t('logs.actions.delete'),
     };
     return actionMap[action] || action;
   };
 
   const getTargetTypeName = (targetType: string) => {
     const typeMap: Record<string, string> = {
-      expense_record: '报账记录',
-      driver: '司机',
-      vehicle: '车辆',
-      advance_fund: '备用金',
-      fee_type: '费用类型',
-      staff: '客服账号',
+      expense_record: t('logs.targets.expense_record'),
+      driver: t('logs.targets.driver'),
+      vehicle: t('logs.targets.vehicle'),
+      advance_fund: t('logs.targets.advance_fund'),
+      fee_type: t('logs.targets.fee_type'),
+      staff: t('logs.targets.staff'),
     };
     return typeMap[targetType] || targetType;
   };
@@ -87,10 +89,10 @@ const LogsPage: React.FC = () => {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">操作日志</h1>
+          <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('logs.title')}</h1>
           <Button onClick={loadLogs} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
-            刷新
+            {t('common.refresh')}
           </Button>
         </div>
 
@@ -99,13 +101,13 @@ const LogsPage: React.FC = () => {
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label>操作人</Label>
+                <Label>{t('logs.operator')}</Label>
                 <Select value={filters.operatorId || 'all'} onValueChange={(value) => setFilters({ ...filters, operatorId: value === 'all' ? '' : value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="全部" />
+                    <SelectValue placeholder={t('common.all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
+                    <SelectItem value="all">{t('common.all')}</SelectItem>
                     {staff.map((s) => (
                       <SelectItem key={s.id} value={s.id.toString()}>
                         {s.name}
@@ -115,23 +117,23 @@ const LogsPage: React.FC = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>操作类型</Label>
+                <Label>{t('logs.actionType')}</Label>
                 <Select value={filters.action || 'all'} onValueChange={(value) => setFilters({ ...filters, action: value === 'all' ? '' : value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="全部" />
+                    <SelectValue placeholder={t('common.all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
-                    <SelectItem value="confirm">确认报账</SelectItem>
-                    <SelectItem value="edit">修改</SelectItem>
-                    <SelectItem value="create">新增</SelectItem>
-                    <SelectItem value="update">更新</SelectItem>
-                    <SelectItem value="delete">删除</SelectItem>
+                    <SelectItem value="all">{t('common.all')}</SelectItem>
+                    <SelectItem value="confirm">{t('logs.actions.confirm')}</SelectItem>
+                    <SelectItem value="edit">{t('logs.actions.edit')}</SelectItem>
+                    <SelectItem value="create">{t('logs.actions.create')}</SelectItem>
+                    <SelectItem value="update">{t('logs.actions.update')}</SelectItem>
+                    <SelectItem value="delete">{t('logs.actions.delete')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>开始日期</Label>
+                <Label>{t('common.startDate')}</Label>
                 <Input
                   type="date"
                   value={filters.startDate}
@@ -139,7 +141,7 @@ const LogsPage: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>结束日期</Label>
+                <Label>{t('common.endDate')}</Label>
                 <Input
                   type="date"
                   value={filters.endDate}
@@ -154,23 +156,23 @@ const LogsPage: React.FC = () => {
         <Card>
           <CardContent className="pt-6">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+              <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>时间</TableHead>
-                    <TableHead>操作人</TableHead>
-                    <TableHead>操作</TableHead>
-                    <TableHead>对象</TableHead>
-                    <TableHead>详情</TableHead>
+                    <TableHead>{t('logs.time')}</TableHead>
+                    <TableHead>{t('logs.operator')}</TableHead>
+                    <TableHead>{t('logs.action')}</TableHead>
+                    <TableHead>{t('logs.target')}</TableHead>
+                    <TableHead>{t('logs.detail')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (

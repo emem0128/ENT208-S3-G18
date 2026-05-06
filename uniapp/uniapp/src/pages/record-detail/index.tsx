@@ -3,13 +3,42 @@ import {View, Text, Image, ScrollView} from '@tarojs/components'
 import {useState, useEffect, useCallback} from 'react'
 import Taro, {useDidShow} from '@tarojs/taro'
 import {withRouteGuard} from '@/components/RouteGuard'
-import type {ExpenseRecord} from '@/db/types'
-import {getExpenseRecordById} from '@/db/api'
+import type {ExpenseRecord, OtherFeeItem} from '@/db/types'
+import {fetchOtherFees, getExpenseRecordById} from '@/db/api'
+import {parseFeeLocationDetail} from '@/utils/feeLocation'
 import {getImageUrl} from '@/utils/upload'
 
 function RecordDetail() {
   const [record, setRecord] = useState<ExpenseRecord | null>(null)
+  const [otherFees, setOtherFees] = useState<OtherFeeItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  const renderFeeItem = useCallback(
+    (label: string, amount: number) => {
+      if (amount <= 0 || !record) return null
+
+      const locationDetails = parseFeeLocationDetail(record.fee_location_detail)[label] || []
+
+      return (
+        <View className="flex flex-col space-y-1">
+          <View className="flex flex-row items-center justify-between">
+            <Text className="text-xl text-muted-foreground">{label}</Text>
+            <Text className="text-xl text-foreground font-medium">¥{amount.toFixed(2)}</Text>
+          </View>
+          {locationDetails.length > 0 && (
+            <View className="flex flex-col space-y-1">
+              {locationDetails.map((item, index) => (
+                <Text key={`${label}-${item.location}-${index}`} className="text-lg text-muted-foreground">
+                  {item.location}: ¥{item.amount.toFixed(2)}
+                </Text>
+              ))}
+            </View>
+          )}
+        </View>
+      )
+    },
+    [record]
+  )
 
   const loadData = useCallback(async () => {
     const instance = Taro.getCurrentInstance()
@@ -24,8 +53,13 @@ function RecordDetail() {
     }
 
     setLoading(true)
-    const {data} = await getExpenseRecordById(Number(id))
+    const recordId = Number(id)
+    const [{data}, {data: otherFeesData}] = await Promise.all([
+      getExpenseRecordById(recordId),
+      fetchOtherFees(recordId)
+    ])
     setRecord(data)
+    setOtherFees(otherFeesData)
     setLoading(false)
   }, [])
 
@@ -100,109 +134,30 @@ function RecordDetail() {
           <View className="bg-card rounded-2xl p-6 shadow-elegant mb-6">
             <Text className="text-2xl font-semibold text-foreground mb-4">费用明细</Text>
             <View className="flex flex-col space-y-3">
-              {record.fee_weighing > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">过磅费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_weighing.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_container > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">提柜费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_container.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_overnight > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">过夜费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_overnight.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_vn_overtime > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">越南超时费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_vn_overtime.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_vn_key > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">越南收钥匙</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_vn_key.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_parking > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">停车费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_parking.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_newpost > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">新岗</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_newpost.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_taxi > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">打车</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_taxi.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_water > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">淋水</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_water.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_tarpaulin > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">解篷布</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_tarpaulin.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_highway > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">高速费</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_highway.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.fee_stamp > 0 && (
-                <View className="flex flex-row items-center justify-between">
-                  <Text className="text-xl text-muted-foreground">盖章</Text>
-                  <Text className="text-xl text-foreground font-medium">
-                    ¥{record.fee_stamp.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {record.note_amount > 0 && (
+              {renderFeeItem('过磅费', record.fee_weighing)}
+              {renderFeeItem('提柜费', record.fee_container)}
+              {renderFeeItem('过夜费', record.fee_overnight)}
+              {renderFeeItem('越南超时费', record.fee_vn_overtime)}
+              {renderFeeItem('越南收钥匙', record.fee_vn_key)}
+              {renderFeeItem('停车费', record.fee_parking)}
+              {renderFeeItem('新岗', record.fee_newpost)}
+              {renderFeeItem('打车', record.fee_taxi)}
+              {renderFeeItem('淋水', record.fee_water)}
+              {renderFeeItem('解篷布', record.fee_tarpaulin)}
+              {renderFeeItem('高速费', record.fee_highway)}
+              {renderFeeItem('盖章', record.fee_stamp)}
+              {otherFees.length > 0 ? (
+                otherFees.map((item) => (
+                  <View key={item.id} className="flex flex-row items-center justify-between">
+                    <Text className="text-xl text-muted-foreground">{item.name}</Text>
+                    <Text className="text-xl text-foreground font-medium">¥{item.amount.toFixed(2)}</Text>
+                  </View>
+                ))
+              ) : record.note_amount > 0 && (
                 <View className="flex flex-col space-y-1">
                   <View className="flex flex-row items-center justify-between">
                     <Text className="text-xl text-muted-foreground">其他费用</Text>
-                    <Text className="text-xl text-foreground font-medium">
-                      ¥{record.note_amount.toFixed(2)}
-                    </Text>
+                    <Text className="text-xl text-foreground font-medium">¥{record.note_amount.toFixed(2)}</Text>
                   </View>
                   {record.note_detail && (
                     <Text className="text-lg text-muted-foreground">{record.note_detail}</Text>

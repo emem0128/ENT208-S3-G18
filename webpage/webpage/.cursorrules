@@ -1,0 +1,83 @@
+# 项目规则 - 马上国际物流管理系统
+
+## 技术栈
+- 小程序端：Taro + React + TypeScript + Tailwind CSS
+- 客服后台：React + TypeScript + Vite + Tailwind CSS
+- 数据库：自建 Supabase (PostgreSQL)，Project ID: rwjbladqwubgjotlygyy
+- 文件存储：Supabase Storage
+- 所有项目共用同一个 Supabase
+
+## 核心约定（必须严守）
+- 登录字段是 username，不是 account
+- 备用金日期字段是 fund_date，不是 recharge_date
+- 字典表关联用 FK + id，不用文本（如 operating_company_id 而非公司名字符串）
+- 状态字段使用 CHECK 约束的枚举字符串，不用 boolean 替代多状态
+- 所有日期字段统一用 DATE 或 TIMESTAMPTZ
+- 不要在前端代码里硬编码 service_role key
+
+## 数据库表结构
+
+### drivers（司机表）
+- id, name, username, password, is_active, created_at
+- phone（电话）
+- emergency_contact_name（紧急联系人姓名）
+- emergency_contact_phone（紧急联系人电话）
+
+### driver_documents（司机证件表，新）
+- id, driver_id (FK→drivers), document_type, image_url, document_number, issue_date, expiry_date, created_at, updated_at
+- document_type CHECK ('qualification','license_front','license_back','id_card','pass')
+- UNIQUE(driver_id, document_type)
+
+### vehicles（车头表）
+基础字段：id, plate_number (UNIQUE), vehicle_type ('own'|'affiliated'|'rented'), source, is_active, created_at
+GPS：terminal_phone, fleet_name, group_number, group_leader
+新增详细字段：asset_owner（资产人）, vehicle_model_short（车型简称如45HQ-1）, vehicle_category（车辆类型如重型半挂牵引车）, operating_company_id (FK→operating_companies), brand, model, vin (UNIQUE), engine_number, registration_date, license_issue_date, archive_number, approved_passengers, total_mass_kg, curb_mass_kg, load_mass_kg, traction_mass_kg, dimensions, scrap_date, inspection_expiry, barcode, insurance_expiry, filing_expiry
+数据来源：data_source ('verified'|'legacy'|'manual')，verified=已核对，legacy=遗留待核对，manual=手动新增
+
+### vehicles_trailer（车挂表，新）
+- id, plate_number (UNIQUE), asset_owner, vehicle_category, operating_company_id (FK), brand, model, vin (UNIQUE), registration_date, license_issue_date, archive_number, total_mass_kg, curb_mass_kg, load_mass_kg, dimensions, scrap_date, inspection_expiry, barcode, is_active, created_at
+
+### truck_trailer_assignments（车头/车挂动态分配，新）
+- id, truck_id (FK→vehicles), trailer_id (FK→vehicles_trailer), assigned_from, assigned_until, is_current (UNIQUE per trailer when true), note, created_at
+- 业务规则：一辆车挂同一时刻只能被一个车头使用；车头可以在不同时间拉不同车挂
+
+### operating_companies（营运公司字典，新）
+- id, name (UNIQUE), short_name, is_active, created_at
+
+### vehicle_documents（车辆证件表，新）
+- id, vehicle_kind ('truck'|'trailer'), vehicle_id (按 vehicle_kind 分别指向 vehicles 或 vehicles_trailer), document_type, image_url, created_at, updated_at
+- document_type CHECK ('license_front','license_back','green_book_1','green_book_2','green_book_3')
+- UNIQUE(vehicle_kind, vehicle_id, document_type)
+
+### expense_records（报账记录表 - 核心）
+id, driver_id, record_date, plate_number, route, fee_weighing, fee_container, fee_overnight, fee_vn_overtime, fee_vn_key, fee_parking, fee_newpost, fee_taxi, fee_water, fee_tarpaulin, fee_highway, fee_stamp, note_amount, note_detail, total_expense, commission, receipt_images, is_overtime, status ('pending'|'confirmed'), confirmed_by, confirmed_at, created_at, updated_at
+
+### service_staff（客服人员表）
+id, username, password, name, role ('admin'|'staff'), created_at
+
+### advance_fund_records（备用金充值记录表）
+id, driver_id, amount, fund_date, month, note, created_at
+
+### fee_types（费用类型配置表）
+id, field_name, display_name, sort_order, is_active
+
+### operation_logs（操作日志表）
+id, operator_id, operator_name, action, target_type, target_id, detail, created_at
+
+### vehicle_locations（GPS 位置表）
+id, vehicle_id (FK→vehicles), terminal_phone, latitude, longitude, speed, direction, gps_time, created_at
+
+## 业务规则
+- 总表 = expense_records 中 status='confirmed' 的记录
+- 加班天数 = is_overtime=true 且 status='confirmed' 的记录按 record_date 去重后的天数
+- status 只有 pending 和 confirmed 两种，没有驳回机制
+- confirmed 的记录锁定不可修改
+- 提成(commission)由客服填写，司机端只读
+- 备用金余额 = 充值总额 - 已确认支出总额
+- 司机端的车牌下拉只显示 vehicles.is_active=true 的车
+- 客服端的车辆管理页要按 data_source 区分显示已核对（verified）和待核对（legacy）
+
+## 常见外键查询模式
+- 查车头详情：JOIN operating_companies 拿公司名
+- 查车头当前拉的车挂：JOIN truck_trailer_assignments WHERE is_current=true JOIN vehicles_trailer
+- 查司机证件：SELECT * FROM driver_documents WHERE driver_id=X

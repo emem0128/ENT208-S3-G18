@@ -4,8 +4,9 @@ import {createClient} from '@supabase/supabase-js'
 import Taro, {showToast} from '@tarojs/taro'
 
 // Supabase 数据库配置（本地数据库）
-const supabaseUrl: string = 'https://rwjbladqwubgjotlygyy.supabase.co'
-const supabaseAnonKey: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3amJsYWRxd3ViZ2pvdGx5Z3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNDUwNTYsImV4cCI6MjA4ODgyMTA1Nn0.dR9w2xmK9UpbNfO_dEAnJ2FqXcj1S2vQ15xexzskhA4'
+export const SUPABASE_URL: string = 'https://rwjbladqwubgjotlygyy.supabase.co'
+export const SUPABASE_ANON_KEY: string =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3amJsYWRxd3ViZ2pvdGx5Z3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNDUwNTYsImV4cCI6MjA4ODgyMTA1Nn0.dR9w2xmK9UpbNfO_dEAnJ2FqXcj1S2vQ15xexzskhA4'
 const appId: string = 'app-a2kae62wkbnl'
 
 let noticed = false
@@ -21,8 +22,7 @@ export const customFetch: typeof fetch = async (url: string, options: RequestIni
     url,
     method: method as keyof Taro.request.Method,
     header: headers,
-    data: body,
-    responseType: 'text'
+    data: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined
   })
 
   // 全局启停提示
@@ -48,7 +48,7 @@ export const customFetch: typeof fetch = async (url: string, options: RequestIni
   } as unknown as Response
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   global: {
     fetch: customFetch
   },

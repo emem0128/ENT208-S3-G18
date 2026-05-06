@@ -6,12 +6,14 @@ interface AuthContextType {
   login: (user: ServiceStaff) => void;
   logout: () => void;
   isAdmin: boolean;
+  isReady: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<ServiceStaff | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     // 从 localStorage 恢复登录状态
@@ -23,6 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('service_staff');
       }
     }
+    setIsReady(true);
   }, []);
 
   const login = (userData: ServiceStaff) => {
@@ -38,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin, isReady }}>
       {children}
     </AuthContext.Provider>
   );

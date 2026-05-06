@@ -1,13 +1,13 @@
 // 报账提交页（首页）
-import {View, Text, Picker, Switch, Button, ScrollView, Image} from '@tarojs/components'
-import {useState, useEffect, useCallback} from 'react'
+import {Button, Image, Picker, ScrollView, Switch, Text, View} from '@tarojs/components'
 import Taro, {useDidShow} from '@tarojs/taro'
-import {useAuth} from '@/contexts/AuthContext'
+import {useCallback, useEffect, useState} from 'react'
 import {withRouteGuard} from '@/components/RouteGuard'
-import type {VehicleCard, FeeType, ExpenseRecord} from '@/db/types'
-import {getFeeTypes, createExpenseRecords} from '@/db/api'
-import {uploadFiles, getImageUrl} from '@/utils/upload'
 import VehicleCardComponent from '@/components/VehicleCard'
+import {useAuth} from '@/contexts/AuthContext'
+import {createExpenseRecords, getDriverById, getFeeTypes} from '@/db/api'
+import type {ExpenseRecord, FeeType, OtherFeeItem, VehicleCard} from '@/db/types'
+import {uploadFiles} from '@/utils/upload'
 
 const STORAGE_KEY = 'expense_draft'
 
@@ -16,6 +16,7 @@ function Submit() {
   const [selectedDate, setSelectedDate] = useState('')
   const [isOvertime, setIsOvertime] = useState(false)
   const [vehicles, setVehicles] = useState<VehicleCard[]>([])
+  const [activeVehicleIndex, setActiveVehicleIndex] = useState(0)
   const [feeTypes, setFeeTypes] = useState<FeeType[]>([])
   const [loading, setLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -55,7 +56,7 @@ function Submit() {
 
     // 检查暂存是否有实质内容（至少一辆车有车牌或费用）
     const hasRealContent = draft.vehicles.some(
-      (v: any) => v.plate_number?.trim() || v.fee_items?.length > 0
+      (v: {plate_number?: string; fee_items?: unknown[]}) => v.plate_number?.trim() || (v.fee_items?.length ?? 0) > 0
     )
     if (!hasRealContent) {
       Taro.removeStorageSync(STORAGE_KEY)
@@ -77,11 +78,11 @@ function Submit() {
     })
   })
 
-  const handleDateChange = (e: any) => {
+  const handleDateChange = (e: {detail: {value: string}}) => {
     setSelectedDate(e.detail.value)
   }
 
-  const handleOvertimeChange = (e: any) => {
+  const handleOvertimeChange = (e: {detail: {value: boolean}}) => {
     setIsOvertime(e.detail.value)
   }
 
@@ -92,10 +93,13 @@ function Submit() {
       route: '',
       fee_items: [],
       receipt_images: [],
-      note: '',
       total: 0
     }
-    setVehicles((prev) => [...prev, newCard])
+    setVehicles((prev) => {
+      const nextVehicles = [...prev, newCard]
+      setActiveVehicleIndex(nextVehicles.length - 1)
+      return nextVehicles
+    })
   }, [])
 
   const updateVehicle = (index: number, card: VehicleCard) => {
@@ -107,18 +111,55 @@ function Submit() {
   const deleteVehicle = (index: number) => {
     const newVehicles = vehicles.filter((_, i) => i !== index)
     setVehicles(newVehicles)
+    setActiveVehicleIndex((prev) => {
+      if (newVehicles.length === 0) return 0
+      if (index < prev) return prev - 1
+      if (index === prev) return Math.max(0, prev - 1)
+      return prev
+    })
   }
 
   const getTotalExpense = () => {
     return vehicles.reduce((sum, v) => sum + v.total, 0)
   }
 
+  const currentVehicle = vehicles[activeVehicleIndex]
+
+  const verifyDriverIsActive = async () => {
+    if (!driver) {
+      Taro.showToast({title: '请先登录', icon: 'none'})
+      return null
+    }
+
+    const {data: latestDriver, error: verifyError} = await getDriverById(driver.id)
+    if (verifyError) {
+      Taro.showToast({title: '网络异常，请重试', icon: 'none'})
+      return null
+    }
+
+    if (!latestDriver || !latestDriver.is_active) {
+      Taro.removeStorageSync('driver_info')
+      Taro.showModal({
+        title: '账号已停用',
+        content: '您的账号已被管理员停用，无法提交报账。请联系客服',
+        showCancel: false,
+        success: () => {
+          Taro.reLaunch({url: '/pages/login/index'})
+        }
+      })
+      return null
+    }
+
+    Taro.setStorageSync('driver_info', latestDriver)
+    return latestDriver
+  }
+
   // 点击"提交报账"：校验 → 检查车牌 → 弹确认层
   const handleSubmit = async () => {
     if (loading) return
 
-    if (!driver) {
-      Taro.showToast({title: '请先登录', icon: 'none'})
+    const activeDriver = await verifyDriverIsActive()
+    if (!activeDriver) {
       return
     }
 
@@ -138,20 +179,6 @@ function Submit() {
       if (!v.plate_number.trim()) {
         Taro.showToast({title: `第${i + 1}辆车：请输入车牌号`, icon: 'none'})
         return
-      }
-      if (v.fee_items.length === 0) {
-        Taro.showToast({title: `第${i + 1}辆车：请至少添加一条费用`, icon: 'none'})
-        return
-      }
-      for (const item of v.fee_items) {
-        if (!item.field_name) {
-          Taro.showToast({title: `第${i + 1}辆车：请选择费用类型`, icon: 'none'})
-          return
-        }
-        if (item.field_name === 'other' && !item.note?.trim()) {
-          Taro.showToast({title: `第${i + 1}辆车：请输入"其他"费用名称`, icon: 'none'})
-          return
-        }
       }
     }
 
@@ -195,6 +222,12 @@ function Submit() {
     setShowConfirm(false)
 
     try {
+      const activeDriver = await verifyDriverIsActive()
+      if (!activeDriver) {
+        setLoading(false)
+        return
+      }
+
       // 上传所有图片
       const allImages: string[][] = []
       for (const v of vehicles) {
@@ -217,26 +250,29 @@ function Submit() {
       // 构建报账记录
       const records: Partial<ExpenseRecord>[] = vehicles.map((v, index) => {
         const feeMap: Record<string, number> = {}
-        let noteAmount = 0
-        const noteDetails: string[] = []
+        const feeLocationDetails: string[] = []
+        const otherFees: OtherFeeItem[] = []
 
         for (const item of v.fee_items) {
           if (item.field_name === 'other') {
-            noteAmount += item.amount
-            if (item.note) {
-              noteDetails.push(`${item.note}:${item.amount}`)
+            if (item.note?.trim()) {
+              otherFees.push({
+                name: item.note.trim(),
+                amount: item.amount,
+                sort_order: otherFees.length
+              })
             }
           } else {
             feeMap[item.field_name] = (feeMap[item.field_name] || 0) + item.amount
-            // 有备注地点/说明的费用也记录到note_detail
+            // 正常费用地点明细写入 fee_location_detail
             if (item.note?.trim()) {
-              noteDetails.push(`${item.display_name}(${item.note.trim()}):${item.amount}`)
+              feeLocationDetails.push(`${item.display_name}(${item.note.trim()}):${item.amount}`)
             }
           }
         }
 
         return {
-          driver_id: driver!.id,
+          driver_id: activeDriver.id,
           record_date: selectedDate,
           plate_number: v.plate_number,
           route: v.route || null,
@@ -252,8 +288,10 @@ function Submit() {
           fee_tarpaulin: feeMap.fee_tarpaulin || 0,
           fee_highway: feeMap.fee_highway || 0,
           fee_stamp: feeMap.fee_stamp || 0,
-          note_amount: noteAmount,
-          note_detail: noteDetails.length > 0 ? noteDetails.join('; ') : v.note || null,
+          note_amount: otherFees.reduce((sum, item) => sum + item.amount, 0),
+          fee_location_detail: feeLocationDetails.length > 0 ? feeLocationDetails.join('; ') : null,
+          note_detail: otherFees.length > 0 ? otherFees.map((item) => `${item.name}:${item.amount}`).join('; ') : null,
+          other_fees: otherFees,
           total_expense: v.total,
           commission: 0,
           receipt_images: allImages[index].length > 0 ? allImages[index] : null,
@@ -274,6 +312,7 @@ function Submit() {
 
       setVehicles([])
       setSelectedDate('')
+      setActiveVehicleIndex(0)
       Taro.removeStorageSync(STORAGE_KEY)
       setLoading(false)
     } catch (error) {
@@ -290,76 +329,122 @@ function Submit() {
     }
   }, [feeTypes, vehicles.length, addVehicle])
 
+  useEffect(() => {
+    if (vehicles.length === 0) {
+      setActiveVehicleIndex(0)
+      return
+    }
+
+    if (activeVehicleIndex > vehicles.length - 1) {
+      setActiveVehicleIndex(vehicles.length - 1)
+    }
+  }, [activeVehicleIndex, vehicles.length])
+
   return (
-    <View className="min-h-screen bg-gradient-subtle">
-      <ScrollView className="w-full" scrollY>
-        <View className="px-4 py-6">
-          <View className="bg-card rounded-2xl p-6 shadow-elegant mb-6">
-            <View className="flex flex-col space-y-4">
-              <View className="flex flex-row items-center justify-between">
-                <Text className="text-2xl font-semibold text-foreground">司机姓名</Text>
-                <Text className="text-2xl text-primary font-bold">{driver?.name}</Text>
-              </View>
+    <View className="page-shell flex flex-col">
+      <View className="surface-card mx-4 mt-4 p-4">
+        <View className="flex flex-col space-y-4">
+          <View className="flex flex-row items-center justify-between">
+            <Text className="text-lg font-semibold text-foreground">司机姓名</Text>
+            <Text className="text-lg text-primary font-semibold">{driver?.name}</Text>
+          </View>
 
-              <View className="flex flex-col space-y-2">
-                <Text className="text-xl text-foreground font-medium">报账日期 <Text className="text-destructive">*</Text></Text>
-                <View className="flex flex-row items-center space-x-3">
-                  <Picker mode="date" value={selectedDate || todayStr} onChange={handleDateChange} className="flex-1">
-                    <View className={`rounded-xl border px-4 py-4 ${selectedDate ? 'bg-input border-border' : 'bg-input border-destructive'}`}>
-                      <Text className={`text-xl ${selectedDate ? 'text-foreground' : 'text-muted-foreground'}`}>
-                        {selectedDate || '请选择日期'}
-                      </Text>
-                    </View>
-                  </Picker>
-                  <View
-                    className="bg-primary/10 rounded-xl px-4 py-4"
-                    onClick={() => setSelectedDate(todayStr)}>
-                    <Text className="text-xl text-primary font-medium">今天</Text>
-                  </View>
+          <View className="flex flex-col space-y-2">
+            <Text className="text-base text-foreground font-medium">报账日期 <Text className="text-destructive">*</Text></Text>
+            <View className="flex flex-row items-center space-x-3">
+              <Picker mode="date" value={selectedDate || todayStr} onChange={handleDateChange} className="flex-1">
+                <View className={`rounded-xl border px-4 py-4 ${selectedDate ? 'bg-input border-border' : 'bg-input border-destructive'}`}>
+                  <Text className={`text-base ${selectedDate ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {selectedDate || '请选择日期'}
+                  </Text>
                 </View>
-              </View>
-
-              <View className="flex flex-row items-center justify-between">
-                <Text className="text-xl text-foreground font-medium">是否加班</Text>
-                <Switch checked={isOvertime} onChange={handleOvertimeChange} color="#3b82f6" />
+              </Picker>
+              <View
+                className="soft-chip px-4 py-4"
+                onClick={() => setSelectedDate(todayStr)}>
+                <Text className="text-base text-primary font-medium">今天</Text>
               </View>
             </View>
           </View>
 
-          {vehicles.map((vehicle, index) => (
+          <View className="flex flex-row items-center justify-between">
+            <Text className="text-base text-foreground font-medium">是否加班</Text>
+            <Switch checked={isOvertime} onChange={handleOvertimeChange} color="#3b82f6" />
+          </View>
+        </View>
+      </View>
+
+      <View className="px-4 py-3">
+        <View className="mb-3">
+          <ScrollView className="w-full whitespace-nowrap" scrollX enableFlex>
+            <View className="flex flex-row items-center gap-3 pr-1">
+              {vehicles.map((vehicle, index) => {
+                const isActive = index === activeVehicleIndex
+                const vehicleLabel = vehicle.plate_number?.trim() || `车辆${index + 1}`
+
+                return (
+                  <View
+                    key={vehicle.id}
+                    className={`relative shrink-0 rounded-full px-4 py-3 ${isActive ? 'bg-primary' : 'bg-card border border-border'}`}
+                    onClick={() => setActiveVehicleIndex(index)}>
+                    <Text className={`text-base font-semibold ${isActive ? 'text-primary-foreground' : 'text-foreground'}`}>
+                      {vehicleLabel}
+                    </Text>
+                    {vehicles.length > 1 && (
+                      <View
+                        className={`absolute -right-1 -top-1 h-5 w-5 rounded-full flex items-center justify-center ${isActive ? 'bg-primary-foreground/25' : 'bg-muted'}`}
+                        onClick={(e) => {
+                          e.stopPropagation?.()
+                          deleteVehicle(index)
+                        }}>
+                        <Text className={`text-xs font-semibold ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}>×</Text>
+                      </View>
+                    )}
+                  </View>
+                )
+              })}
+
+              <View
+                className="shrink-0 rounded-full border border-dashed border-primary/50 bg-primary/5 px-4 py-3"
+                onClick={addVehicle}>
+                <Text className="text-lg font-semibold text-primary">+</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+
+      <ScrollView className="w-full flex-1" scrollY>
+        <View className="px-4 pt-1 pb-6">
+          {currentVehicle && (
             <VehicleCardComponent
-              key={vehicle.id}
-              card={vehicle}
+              key={currentVehicle.id}
+              card={currentVehicle}
               feeTypes={feeTypes}
-              onChange={(card) => updateVehicle(index, card)}
-              onDelete={() => deleteVehicle(index)}
+              onChange={(card) => updateVehicle(activeVehicleIndex, card)}
+              onDelete={() => deleteVehicle(activeVehicleIndex)}
             />
-          ))}
-
-          <View
-            className="flex flex-row items-center justify-center py-4 bg-card rounded-2xl shadow-elegant mb-6"
-            onClick={addVehicle}>
-            <View className="i-mdi-plus-circle text-primary text-3xl mr-2" />
-            <Text className="text-2xl text-primary font-semibold">添加车辆</Text>
-          </View>
-
-          <View className="bg-primary/10 rounded-2xl p-6 mb-6">
-            <View className="flex flex-row items-center justify-between">
-              <Text className="text-2xl text-foreground font-semibold">今日费用合计</Text>
-              <Text className="text-3xl font-bold text-primary">¥{getTotalExpense().toFixed(2)}</Text>
-            </View>
-          </View>
-
-          <Button
-            className="w-full bg-primary text-primary-foreground text-2xl font-semibold rounded-2xl"
-            onClick={handleSubmit}
-            disabled={loading}>
-            <View className="py-4">
-              <Text>{loading ? '处理中...' : '提交报账'}</Text>
-            </View>
-          </Button>
+          )}
         </View>
       </ScrollView>
+
+      <View className="border-t border-border bg-background/95 px-4 pb-6 pt-4">
+        <View className="surface-card bg-primary/10 p-4 mb-2">
+            <View className="flex flex-row items-center justify-between">
+              <Text className="text-base text-foreground font-medium">今日费用合计</Text>
+              <Text className="text-2xl font-bold text-primary">¥{getTotalExpense().toFixed(2)}</Text>
+            </View>
+          </View>
+
+        <Button
+          className="w-full bg-primary text-primary-foreground rounded-xl"
+          onClick={handleSubmit}
+          disabled={loading}>
+          <View className="py-3">
+            <Text className="text-base font-semibold">{loading ? '处理中...' : '提交报账'}</Text>
+          </View>
+        </Button>
+      </View>
 
       {/* 底部确认弹出层 */}
       {showConfirm && (
@@ -392,7 +477,7 @@ function Submit() {
             {/* 可滚动内容 */}
             <ScrollView scrollY style={{flex: 1, overflow: 'hidden'}}>
               <View className="px-6 py-4 flex flex-col space-y-5">
-                {vehicles.map((v, vi) => (
+                {vehicles.map((v) => (
                   <View key={v.id} className="bg-muted rounded-2xl p-4">
                     {/* 车辆标题行 */}
                     <View className="flex flex-row items-center justify-between mb-2">
@@ -407,8 +492,8 @@ function Submit() {
 
                     {/* 费用明细 */}
                     <View className="flex flex-col space-y-1 ml-2">
-                      {v.fee_items.map((item, fi) => (
-                        <View key={fi} className="flex flex-row justify-between">
+                      {v.fee_items.map((item) => (
+                        <View key={item.id} className="flex flex-row justify-between">
                           <Text className="text-lg text-foreground">
                             {item.field_name === 'other'
                               ? `其他（${item.note}）`
@@ -426,9 +511,9 @@ function Submit() {
                       <View className="mt-3">
                         <Text className="text-lg text-muted-foreground mb-2">📎 凭证图片 {v.receipt_images.length} 张</Text>
                         <View className="flex flex-row flex-wrap gap-2">
-                          {v.receipt_images.map((img, ii) => (
+                          {v.receipt_images.map((img) => (
                             <Image
-                              key={ii}
+                              key={img.path}
                               src={img.path}
                               className="w-16 h-16 rounded-lg"
                               mode="aspectFill"
@@ -442,10 +527,6 @@ function Submit() {
                       </View>
                     )}
 
-                    {/* 备注 */}
-                    {v.note ? (
-                      <Text className="text-lg text-muted-foreground mt-2">💬 {v.note}</Text>
-                    ) : null}
                   </View>
                 ))}
 

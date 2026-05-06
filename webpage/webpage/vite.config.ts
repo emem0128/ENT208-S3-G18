@@ -21,4 +21,22 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/api/nvidia': {
+        target: 'https://integrate.api.nvidia.com',
+        changeOrigin: true,
+        rewrite: (proxyPath) => proxyPath.replace(/^\/api\/nvidia/, '/v1'),
+      },
+      '/api/ocr': {
+        target: 'http://119.91.129.106',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        },
+      },
+    },
+  },
 });

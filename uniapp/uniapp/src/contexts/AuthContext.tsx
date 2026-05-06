@@ -2,7 +2,7 @@ import {createContext, useContext, useEffect, useState, type ReactNode} from 're
 import Taro from '@tarojs/taro'
 import {supabase} from '@/client/supabase'
 import type {User} from '@supabase/supabase-js'
-import {verifyDriverLogin, type Driver} from '@/db/api'
+import {getDriverById, verifyDriverLogin, type Driver} from '@/db/api'
 
 export interface Profile {
   [key: string]: unknown
@@ -58,6 +58,29 @@ export function AuthProvider({children}: {children: ReactNode}) {
     if (driverInfo) {
       setDriver(driverInfo)
       setLoading(false)
+      getDriverById(driverInfo.id).then(({data, error}) => {
+        if (error) {
+          console.warn('司机状态校验失败:', error)
+          return
+        }
+
+        if (!data || !data.is_active) {
+          Taro.removeStorageSync('driver_info')
+          setDriver(null)
+          Taro.showModal({
+            title: '账号已停用',
+            content: '您的账号已被管理员停用，请联系客服',
+            showCancel: false,
+            success: () => {
+              Taro.reLaunch({url: '/pages/login/index'})
+            }
+          })
+          return
+        }
+
+        Taro.setStorageSync('driver_info', data)
+        setDriver(data)
+      })
       return
     }
 

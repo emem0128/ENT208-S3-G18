@@ -1,312 +1,506 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, RefreshCw, Search } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import MainLayout from '@/components/layouts/MainLayout';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Power, RefreshCw } from 'lucide-react';
-import { getAllVehicles, createVehicle, updateVehicle, createOperationLog } from '@/db/api';
-import type { Vehicle } from '@/types/database';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { VehicleType } from '@/types/database';
+import {
+  createManualTruck,
+  getOperatingCompanies,
+  getTrailers,
+  getTrucks,
+  getVehicleModelOptions,
+  getVehicleStats,
+  type ManualTruckInput,
+  type TrailerListFilters,
+  type TruckListFilters,
+} from '@/features/vehicles/api';
+import {
+  CompanySelect,
+  DataSourceBadge,
+  InspectionWarning,
+  ListPagination,
+  StatCards,
+  TrailerMetaLine,
+  TruckMetaLine,
+  VehicleCardSkeleton,
+} from '@/features/vehicles/components';
+import { sanitizePlateNumber } from '@/features/vehicles/utils';
+
+type ManualTruckForm = {
+  plate_number: string;
+  vehicle_type: VehicleType;
+  vehicle_model_short: string;
+  vehicle_category: string;
+  asset_owner: string;
+  operating_company_id: string;
+  brand: string;
+  model: string;
+  terminal_phone: string;
+};
+
+const defaultTruckFilters: TruckListFilters = {
+  search: '',
+  vehicleModelShort: 'all',
+  dataSource: 'all',
+  operatingCompanyId: 'all',
+  page: 1,
+};
+
+const defaultTrailerFilters: TrailerListFilters = {
+  search: '',
+  operatingCompanyId: 'all',
+  page: 1,
+};
+
+function normalizeOptional(value: string) {
+  return value.trim() || null;
+}
 
 const VehiclesPage: React.FC = () => {
-  const { user } = useAuth();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
-  const [formData, setFormData] = useState({
-    plate_number: '',
-    vehicle_type: 'own' as 'own' | 'affiliated' | 'rented',
-    source: '',
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const isTrailerTab = location.pathname === '/vehicles/trailers';
+
+  const [truckFilters, setTruckFilters] = React.useState<TruckListFilters>(defaultTruckFilters);
+  const [trailerFilters, setTrailerFilters] = React.useState<TrailerListFilters>(defaultTrailerFilters);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+
+  const statsQuery = useQuery({
+    queryKey: ['vehicle-stats'],
+    queryFn: getVehicleStats,
   });
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
+  const companiesQuery = useQuery({
+    queryKey: ['operating-companies'],
+    queryFn: getOperatingCompanies,
+  });
 
-  const loadVehicles = async () => {
-    setLoading(true);
-    try {
-      const data = await getAllVehicles();
-      setVehicles(data);
-    } catch (error) {
-      console.error('加载车辆列表失败:', error);
-      toast.error('加载车辆列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const modelsQuery = useQuery({
+    queryKey: ['vehicle-model-options'],
+    queryFn: getVehicleModelOptions,
+  });
 
-  const handleOpenDialog = (vehicle?: Vehicle) => {
-    if (vehicle) {
-      setEditingVehicle(vehicle);
-      setFormData({
-        plate_number: vehicle.plate_number,
-        vehicle_type: vehicle.vehicle_type,
-        source: vehicle.source || '',
-      });
-    } else {
-      setEditingVehicle(null);
-      setFormData({
-        plate_number: '',
-        vehicle_type: 'own',
-        source: '',
-      });
-    }
-    setDialogOpen(true);
-  };
+  const trucksQuery = useQuery({
+    queryKey: ['trucks', truckFilters],
+    queryFn: () => getTrucks(truckFilters),
+    enabled: !isTrailerTab,
+  });
 
-  const handleSubmit = async () => {
-    if (!user) return;
+  const trailersQuery = useQuery({
+    queryKey: ['trailers', trailerFilters],
+    queryFn: () => getTrailers(trailerFilters),
+    enabled: isTrailerTab,
+  });
 
-    if (!formData.plate_number) {
-      toast.error('请填写车牌号');
-      return;
-    }
+  const form = useForm<ManualTruckForm>({
+    defaultValues: {
+      plate_number: '',
+      vehicle_type: 'own',
+      vehicle_model_short: '',
+      vehicle_category: '',
+      asset_owner: '',
+      operating_company_id: 'none',
+      brand: '',
+      model: '',
+      terminal_phone: '',
+    },
+  });
 
-    if ((formData.vehicle_type === 'affiliated' || formData.vehicle_type === 'rented') && !formData.source) {
-      toast.error('挂靠车和租用车必须填写来源');
-      return;
-    }
-
-    try {
-      if (editingVehicle) {
-        await updateVehicle(editingVehicle.id, formData);
-        await createOperationLog({
-          operator_id: user.id,
-          operator_name: user.name,
-          action: 'update',
-          target_type: 'vehicle',
-          target_id: editingVehicle.id,
-          detail: `修改车辆信息：${formData.plate_number}`,
-        });
-        toast.success('修改成功');
-      } else {
-        const newVehicle = await createVehicle({
-          ...formData,
-          is_active: true,
-        });
-        await createOperationLog({
-          operator_id: user.id,
-          operator_name: user.name,
-          action: 'create',
-          target_type: 'vehicle',
-          target_id: newVehicle.id,
-          detail: `新增车辆：${formData.plate_number}`,
-        });
-        toast.success('新增成功');
-      }
+  const createMutation = useMutation({
+    mutationFn: (values: ManualTruckInput) => createManualTruck(values),
+    onSuccess: async (vehicle) => {
+      toast.success('车辆已新增');
       setDialogOpen(false);
-      loadVehicles();
-    } catch (error) {
-      console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
-    }
-  };
-
-  const handleToggleActive = async (vehicle: Vehicle) => {
-    if (!user) return;
-    try {
-      await updateVehicle(vehicle.id, { is_active: !vehicle.is_active });
-      await createOperationLog({
-        operator_id: user.id,
-        operator_name: user.name,
-        action: 'update',
-        target_type: 'vehicle',
-        target_id: vehicle.id,
-        detail: `${vehicle.is_active ? '停用' : '启用'}车辆：${vehicle.plate_number}`,
-      });
-      toast.success(vehicle.is_active ? '已停用' : '已启用');
-      loadVehicles();
-    } catch (error) {
-      console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
-    }
-  };
-
-  const getVehicleTypeName = (type: string) => {
-    const typeMap: Record<string, string> = {
-      own: '自有车',
-      affiliated: '挂靠车',
-      rented: '租用车',
-    };
-    return typeMap[type] || type;
-  };
-
-  const filteredVehicles = vehicles.filter(vehicle => {
-    const matchSearch = vehicle.plate_number.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchType = !filterType || vehicle.vehicle_type === filterType;
-    return matchSearch && matchType;
+      form.reset();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['trucks'] }),
+        queryClient.invalidateQueries({ queryKey: ['vehicle-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['vehicle-model-options'] }),
+      ]);
+      navigate(`/vehicles/${vehicle.id}`);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : '新增失败');
+    },
   });
+
+  const companies = companiesQuery.data ?? [];
+  const models = modelsQuery.data ?? [];
+  const truckResult = trucksQuery.data;
+  const trailerResult = trailersQuery.data;
+
+  const setTruckFilter = <K extends keyof TruckListFilters>(key: K, value: TruckListFilters[K]) => {
+    setTruckFilters((current) => ({
+      ...current,
+      [key]: value,
+      page: key === 'page' ? Number(value) : 1,
+    }));
+  };
+
+  const setTrailerFilter = <K extends keyof TrailerListFilters>(key: K, value: TrailerListFilters[K]) => {
+    setTrailerFilters((current) => ({
+      ...current,
+      [key]: value,
+      page: key === 'page' ? Number(value) : 1,
+    }));
+  };
+
+  const refreshActiveTab = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['vehicle-stats'] }),
+      queryClient.invalidateQueries({ queryKey: isTrailerTab ? ['trailers'] : ['trucks'] }),
+    ]);
+    toast.success('已刷新');
+  };
+
+  const submitManualTruck = (values: ManualTruckForm) => {
+    const plateNumber = sanitizePlateNumber(values.plate_number);
+    if (!plateNumber || !values.vehicle_model_short.trim()) {
+      toast.error('请填写车牌号和车型简称');
+      return;
+    }
+
+    createMutation.mutate({
+      plate_number: plateNumber,
+      vehicle_type: values.vehicle_type,
+      vehicle_model_short: values.vehicle_model_short.trim(),
+      vehicle_category: normalizeOptional(values.vehicle_category),
+      asset_owner: normalizeOptional(values.asset_owner),
+      operating_company_id:
+        values.operating_company_id && values.operating_company_id !== 'none'
+          ? Number(values.operating_company_id)
+          : null,
+      brand: normalizeOptional(values.brand),
+      model: normalizeOptional(values.model),
+      terminal_phone: normalizeOptional(values.terminal_phone),
+    });
+  };
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">车辆管理</h1>
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">车辆管理</h1>
+            <p className="mt-1 text-sm text-muted-foreground">管理车头、车挂、证件和车挂分配关系</p>
+          </div>
           <div className="flex items-center gap-2">
-            <Button onClick={loadVehicles} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button onClick={refreshActiveTab} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
               刷新
             </Button>
-            <Button onClick={() => handleOpenDialog()} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button onClick={() => setDialogOpen(true)} size="sm">
+              <Plus className="mr-2 h-4 w-4" />
               新增车辆
             </Button>
           </div>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <Input
-                placeholder="搜索车牌号..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Select value={filterType || 'all'} onValueChange={(value) => setFilterType(value === 'all' ? '' : value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="全部类型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部类型</SelectItem>
-                  <SelectItem value="own">自有车</SelectItem>
-                  <SelectItem value="affiliated">挂靠车</SelectItem>
-                  <SelectItem value="rented">租用车</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <StatCards stats={statsQuery.data} loading={statsQuery.isLoading} />
 
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>车牌号</TableHead>
-                    <TableHead>车辆类型</TableHead>
-                    <TableHead>来源</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>创建时间</TableHead>
-                    <TableHead>操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredVehicles.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        暂无数据
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredVehicles.map((vehicle) => (
-                      <TableRow key={vehicle.id}>
-                        <TableCell className="font-medium">{vehicle.plate_number}</TableCell>
-                        <TableCell>{getVehicleTypeName(vehicle.vehicle_type)}</TableCell>
-                        <TableCell>{vehicle.source || '-'}</TableCell>
-                        <TableCell>
-                          {vehicle.is_active ? (
-                            <Badge variant="outline" className="bg-success/10 text-success border-success">
-                              启用
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-muted text-muted-foreground">
-                              停用
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{format(new Date(vehicle.created_at), 'yyyy-MM-dd')}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleOpenDialog(vehicle)}
-                            >
-                              <Edit className="h-4 w-4 mr-1" />
-                              编辑
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleToggleActive(vehicle)}
-                            >
-                              <Power className="h-4 w-4 mr-1" />
-                              {vehicle.is_active ? '停用' : '启用'}
+        <Tabs value={isTrailerTab ? 'trailers' : 'trucks'} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="trucks" asChild>
+              <Link to="/vehicles">车头列表</Link>
+            </TabsTrigger>
+            <TabsTrigger value="trailers" asChild>
+              <Link to="/vehicles/trailers">车挂列表</Link>
+            </TabsTrigger>
+          </TabsList>
+
+          {!isTrailerTab ? (
+            <Card className="rounded-lg">
+              <CardContent className="space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder="搜索车牌号 / VIN / 品牌"
+                      value={truckFilters.search}
+                      onChange={(event) => setTruckFilter('search', event.target.value)}
+                    />
+                  </div>
+                  <Select value={truckFilters.vehicleModelShort} onValueChange={(value) => setTruckFilter('vehicleModelShort', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="车型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部车型</SelectItem>
+                      {models.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={truckFilters.dataSource}
+                    onValueChange={(value) => setTruckFilter('dataSource', value as TruckListFilters['dataSource'])}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="数据来源" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部来源</SelectItem>
+                      <SelectItem value="verified">已核对</SelectItem>
+                      <SelectItem value="manual">手动添加</SelectItem>
+                      <SelectItem value="legacy">待核对</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <CompanySelect
+                    value={truckFilters.operatingCompanyId}
+                    companies={companies}
+                    onChange={(value) => setTruckFilter('operatingCompanyId', value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  {trucksQuery.isLoading ? (
+                    Array.from({ length: 5 }).map((_, index) => <VehicleCardSkeleton key={index} />)
+                  ) : truckResult?.rows.length ? (
+                    truckResult.rows.map((vehicle) => (
+                      <Card key={vehicle.id} className="rounded-lg">
+                        <CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_2fr_auto] md:items-center">
+                          <div>
+                            <div className="text-2xl font-semibold tracking-wide">{vehicle.plate_number}</div>
+                            <div className="mt-1 text-sm text-muted-foreground">{vehicle.vehicle_model_short || '-'}</div>
+                          </div>
+                          <div className="space-y-2">
+                            <TruckMetaLine vehicle={vehicle} companies={companies} />
+                            <InspectionWarning value={vehicle.inspection_expiry} />
+                          </div>
+                          <div className="flex items-center gap-2 md:flex-col md:items-end">
+                            <DataSourceBadge source={vehicle.data_source} />
+                            <Button asChild size="sm" variant={vehicle.data_source === 'legacy' ? 'default' : 'outline'}>
+                              <Link to={`/vehicles/${vehicle.id}`}>{vehicle.data_source === 'legacy' ? '补全' : '查看'}</Link>
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </CardContent>
+                      </Card>
                     ))
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">暂无车辆</div>
                   )}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+
+                <ListPagination
+                  page={truckFilters.page}
+                  count={truckResult?.count ?? 0}
+                  onPageChange={(page) => setTruckFilter('page', page)}
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="rounded-lg">
+              <CardContent className="space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_1fr]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder="搜索车牌号 / VIN / 品牌"
+                      value={trailerFilters.search}
+                      onChange={(event) => setTrailerFilter('search', event.target.value)}
+                    />
+                  </div>
+                  <CompanySelect
+                    value={trailerFilters.operatingCompanyId}
+                    companies={companies}
+                    onChange={(value) => setTrailerFilter('operatingCompanyId', value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  {trailersQuery.isLoading ? (
+                    Array.from({ length: 5 }).map((_, index) => <VehicleCardSkeleton key={index} />)
+                  ) : trailerResult?.rows.length ? (
+                    trailerResult.rows.map((trailer) => (
+                      <Card key={trailer.id} className="rounded-lg">
+                        <CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_2fr_auto] md:items-center">
+                          <div>
+                            <div className="text-2xl font-semibold tracking-wide">{trailer.plate_number}</div>
+                            <div className="mt-1 text-sm text-muted-foreground">{trailer.vehicle_category || '-'}</div>
+                          </div>
+                          <div className="space-y-2">
+                            <TrailerMetaLine trailer={trailer} companies={companies} />
+                            <InspectionWarning value={trailer.inspection_expiry} />
+                          </div>
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={`/vehicles/trailers/${trailer.id}`}>查看</Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">暂无车挂</div>
+                  )}
+                </div>
+
+                <ListPagination
+                  page={trailerFilters.page}
+                  count={trailerResult?.count ?? 0}
+                  onPageChange={(page) => setTrailerFilter('page', page)}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </Tabs>
       </div>
 
-      {/* 新增/编辑对话框 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingVehicle ? '编辑车辆' : '新增车辆'}</DialogTitle>
+            <DialogTitle>新增车辆</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>车牌号</Label>
-              <Input
-                value={formData.plate_number}
-                onChange={(e) => setFormData({ ...formData, plate_number: e.target.value })}
-                placeholder="请输入车牌号"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>车辆类型</Label>
-              <Select
-                value={formData.vehicle_type}
-                onValueChange={(value: 'own' | 'affiliated' | 'rented') =>
-                  setFormData({ ...formData, vehicle_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="own">自有车</SelectItem>
-                  <SelectItem value="affiliated">挂靠车</SelectItem>
-                  <SelectItem value="rented">租用车</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {(formData.vehicle_type === 'affiliated' || formData.vehicle_type === 'rented') && (
-              <div className="space-y-2">
-                <Label>来源</Label>
-                <Input
-                  value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  placeholder="请输入来源"
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(submitManualTruck)}>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="plate_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>车牌号</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="例如 桂FB0797" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
+                <FormField
+                  control={form.control}
+                  name="vehicle_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>车辆归属类型</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="own">自有车</SelectItem>
+                          <SelectItem value="affiliated">挂靠车</SelectItem>
+                          <SelectItem value="rented">租用车</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="vehicle_model_short"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>车型简称</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="例如 45HQ-1" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="vehicle_category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>车辆类型</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="例如 重型半挂牵引车" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="asset_owner"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>资产人</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="operating_company_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>营运公司</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="暂无" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">暂无</SelectItem>
+                          {companies.map((company) => (
+                            <SelectItem key={company.id} value={String(company.id)}>
+                              {company.short_name || company.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="brand"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>品牌</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="model"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>型号</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="md:col-span-2">
+                  <Label>终端标识</Label>
+                  <Input className="mt-2" {...form.register('terminal_phone')} />
+                </div>
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleSubmit}>
-              {editingVehicle ? '保存' : '新增'}
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  取消
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? '保存中...' : '保存并查看'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </MainLayout>

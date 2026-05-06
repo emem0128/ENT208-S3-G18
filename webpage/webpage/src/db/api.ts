@@ -6,8 +6,11 @@ import type {
   Vehicle,
   FeeType,
   ExpenseRecord,
+  ExpenseFeeDetail,
+  OtherFeeItem,
   AdvanceFundRecord,
   OperationLog,
+  LegalReview,
   ExpenseRecordWithDriver,
   AdvanceFundRecordWithDriver,
 } from '@/types/database';
@@ -38,6 +41,76 @@ function invalidateCache(prefix: string) {
       queryCache.delete(key);
     }
   }
+}
+
+function normalizeOtherFees(otherFees?: OtherFeeItem[] | null): OtherFeeItem[] {
+  return (otherFees || [])
+    .map((item, index) => ({
+      id: item.id,
+      expense_record_id: item.expense_record_id,
+      name: item.name?.trim() || '',
+      amount: Number(item.amount) || 0,
+      sort_order: item.sort_order ?? index,
+    }))
+    .filter((item) => item.name && item.amount > 0);
+}
+
+async function fetchOtherFeesMap(recordIds: number[]) {
+  if (recordIds.length === 0) {
+    return new Map<number, OtherFeeItem[]>();
+  }
+
+  const { data, error } = await supabase
+    .from('expense_other_fees')
+    .select('*')
+    .in('expense_record_id', recordIds)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+
+  const result = new Map<number, OtherFeeItem[]>();
+  for (const row of Array.isArray(data) ? (data as OtherFeeItem[]) : []) {
+    const recordId = Number(row.expense_record_id);
+    if (!result.has(recordId)) {
+      result.set(recordId, []);
+    }
+    result.get(recordId)!.push(row);
+  }
+  return result;
+}
+
+async function attachOtherFees<T extends { id: number }>(records: T[]): Promise<Array<T & { other_fees: OtherFeeItem[] }>> {
+  const otherFeesMap = await fetchOtherFeesMap(records.map((record) => record.id));
+  return records.map((record) => ({
+    ...record,
+    other_fees: otherFeesMap.get(record.id) || [],
+  }));
+}
+
+async function replaceExpenseOtherFees(expenseRecordId: number, otherFees?: OtherFeeItem[] | null) {
+  const { error: deleteError } = await supabase
+    .from('expense_other_fees')
+    .delete()
+    .eq('expense_record_id', expenseRecordId);
+
+  if (deleteError) throw deleteError;
+
+  const normalized = normalizeOtherFees(otherFees);
+  if (normalized.length === 0) return;
+
+  const rows = normalized.map((item, index) => ({
+    expense_record_id: expenseRecordId,
+    name: item.name,
+    amount: item.amount,
+    sort_order: item.sort_order ?? index,
+  }));
+
+  const { error: insertError } = await supabase
+    .from('expense_other_fees')
+    .insert(rows);
+
+  if (insertError) throw insertError;
 }
 
 // 辅助函数：获取月末日期
@@ -299,7 +372,8 @@ export async function getExpenseRecords(filters?: {
   const { data, error } = await query;
 
   if (error) throw error;
-  return Array.isArray(data) ? data : [];
+  const records = Array.isArray(data) ? (data as ExpenseRecordWithDriver[]) : [];
+  return attachOtherFees(records);
 }
 
 export async function getExpenseRecordById(id: number) {
@@ -310,7 +384,9 @@ export async function getExpenseRecordById(id: number) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  if (!data) return data;
+  const [record] = await attachOtherFees([data as ExpenseRecordWithDriver]);
+  return record;
 }
 
 export async function updateExpenseRecord(id: number, updates: Partial<ExpenseRecord>) {
@@ -320,6 +396,7 @@ export async function updateExpenseRecord(id: number, updates: Partial<ExpenseRe
     .eq('id', id);
 
   if (error) throw error;
+  await replaceExpenseOtherFees(id, updates.other_fees);
 }
 
 export async function confirmExpenseRecord(id: number, confirmedBy: string) {
@@ -360,6 +437,58 @@ export async function batchUpdateCommission(ids: number[], commission: number) {
     .in('id', ids);
 
   if (error) throw error;
+}
+
+export async function getExpenseFeeDetailsByRecord(expenseRecordId: number) {
+  const { data, error } = await supabase
+    .from('expense_fee_details')
+    .select('*')
+    .eq('expense_record_id', expenseRecordId)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return Array.isArray(data) ? (data as ExpenseFeeDetail[]) : [];
+}
+
+export async function replaceExpenseFeeDetails(
+  expenseRecordId: number,
+  details: Array<{ fee_field_name: string; detail_location: string; amount: number; sort_order?: number }>
+) {
+  const { error: deleteError } = await supabase
+    .from('expense_fee_details')
+    .delete()
+    .eq('expense_record_id', expenseRecordId);
+
+  if (deleteError) throw deleteError;
+
+  if (details.length === 0) return;
+
+  const rows = details.map((item, index) => ({
+    expense_record_id: expenseRecordId,
+    fee_field_name: item.fee_field_name,
+    detail_location: item.detail_location,
+    amount: item.amount,
+    sort_order: item.sort_order ?? index,
+  }));
+
+  const { error: insertError } = await supabase
+    .from('expense_fee_details')
+    .insert(rows);
+
+  if (insertError) throw insertError;
+}
+
+export async function fetchOtherFees(recordId: number) {
+  const { data, error } = await supabase
+    .from('expense_other_fees')
+    .select('*')
+    .eq('expense_record_id', recordId)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return Array.isArray(data) ? (data as OtherFeeItem[]) : [];
 }
 
 // ==================== 备用金记录 ====================
@@ -467,6 +596,48 @@ export async function getOperationLogs(filters?: {
 
   if (error) throw error;
   return Array.isArray(data) ? data : [];
+}
+
+// ==================== 合同法务审查 ====================
+
+export async function createLegalReview(review: {
+  file_name: string;
+  review_result: string;
+  risk_level?: LegalReview['risk_level'];
+  created_by?: string | null;
+}) {
+  const { data, error } = await supabase
+    .from('legal_reviews')
+    .insert({
+      file_name: review.file_name,
+      review_result: review.review_result,
+      risk_level: review.risk_level ?? null,
+      created_by: review.created_by ?? null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  invalidateCache('legal_reviews:');
+  return data as LegalReview;
+}
+
+export async function getRecentLegalReviews(limit = 10) {
+  const cacheKey = `legal_reviews:recent:${limit}`;
+  const cached = getCached<LegalReview[]>(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from('legal_reviews')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const result = Array.isArray(data) ? (data as LegalReview[]) : [];
+  setCached(cacheKey, result);
+  return result;
 }
 
 // ==================== 统计查询 ====================

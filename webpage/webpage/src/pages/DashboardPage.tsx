@@ -11,8 +11,10 @@ import { getDashboardStats, getDriverMonthStats } from '@/db/api';
 import type { DashboardStats, DriverMonthStats } from '@/types/database';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 const DashboardPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [driverStats, setDriverStats] = useState<DriverMonthStats[]>([]);
@@ -33,7 +35,7 @@ const DashboardPage: React.FC = () => {
       setDriverStats(driverData);
     } catch (error) {
       console.error('加载数据失败:', error);
-      toast.error('加载数据失败');
+      toast.error(t('toast.loadDataFailed'));
     } finally {
       setLoading(false);
     }
@@ -53,12 +55,12 @@ const DashboardPage: React.FC = () => {
         {/* 顶部信息栏 */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold border-b pb-4 mb-6">数据看板</h1>
-            <p className="text-muted-foreground mt-1">当前日期：{format(new Date(), 'yyyy年MM月dd日')}</p>
+            <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('dashboard.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('dashboard.currentDate', { date: format(new Date(), 'yyyy年MM月dd日') })}</p>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <Label>查看月份</Label>
+              <Label>{t('dashboard.viewMonth')}</Label>
               <input
                 type="month"
                 value={selectedMonth}
@@ -68,7 +70,7 @@ const DashboardPage: React.FC = () => {
             </div>
             <Button onClick={loadData} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
-              刷新数据
+              {t('common.refreshData')}
             </Button>
           </div>
         </div>
@@ -79,7 +81,7 @@ const DashboardPage: React.FC = () => {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                  今日新提交
+                  {t('dashboard.todayNew')}
                   <FileText className="h-4 w-4 text-primary" />
                 </CardTitle>
               </CardHeader>
@@ -87,17 +89,14 @@ const DashboardPage: React.FC = () => {
                 {loading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <>
-                    <div className="text-3xl font-bold">{stats?.todayNew || 0}</div>
-                    <p className="mt-2 text-xs text-muted-foreground">较昨日 +8%</p>
-                  </>
+                  <div className="text-3xl font-bold">{stats?.todayNew || 0}</div>
                 )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                  今日待确认
+                  {t('dashboard.todayPending')}
                   <Clock className="h-4 w-4 text-warning" />
                 </CardTitle>
               </CardHeader>
@@ -105,17 +104,14 @@ const DashboardPage: React.FC = () => {
                 {loading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <>
-                    <div className="text-3xl font-bold">{stats?.todayPending || 0}</div>
-                    <p className="mt-2 text-xs text-muted-foreground">较昨日 -3%</p>
-                  </>
+                  <div className="text-3xl font-bold">{stats?.todayPending || 0}</div>
                 )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                  今日已确认
+                  {t('dashboard.todayConfirmed')}
                   <CheckCircle className="h-4 w-4 text-success" />
                 </CardTitle>
               </CardHeader>
@@ -123,17 +119,14 @@ const DashboardPage: React.FC = () => {
                 {loading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <>
-                    <div className="text-3xl font-bold text-success">{stats?.todayConfirmed || 0}</div>
-                    <p className="mt-2 text-xs text-muted-foreground">较昨日 +12%</p>
-                  </>
+                  <div className="text-3xl font-bold text-success">{stats?.todayConfirmed || 0}</div>
                 )}
               </CardContent>
             </Card>
             <Card className={stats && stats.totalPending > 0 ? 'border-warning' : ''}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                  总待确认
+                  {t('dashboard.totalPending')}
                   <AlertCircle className="h-4 w-4 text-warning" />
                 </CardTitle>
               </CardHeader>
@@ -141,12 +134,9 @@ const DashboardPage: React.FC = () => {
                 {loading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <>
-                    <div className={`text-3xl font-bold ${stats && stats.totalPending > 0 ? 'text-warning' : ''}`}>
-                      {stats?.totalPending || 0}
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">较昨日 +2%</p>
-                  </>
+                  <div className={`text-3xl font-bold ${stats && stats.totalPending > 0 ? 'text-warning' : ''}`}>
+                    {stats?.totalPending || 0}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -156,7 +146,7 @@ const DashboardPage: React.FC = () => {
         {/* 月份汇总区域 */}
         <Card>
           <CardHeader>
-            <CardTitle>{selectedMonth.replace('-', '年')}月汇总</CardTitle>
+            <CardTitle>{t('dashboard.monthSummary', { month: selectedMonth.replace('-', '年') })}</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -171,19 +161,19 @@ const DashboardPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">月度总支出</div>
+                  <div className="text-sm text-muted-foreground mb-1">{t('dashboard.monthlyExpense')}</div>
                   <div className="text-2xl font-bold">¥{stats?.monthTotalExpense.toFixed(2) || '0.00'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">月度总提成</div>
+                  <div className="text-sm text-muted-foreground mb-1">{t('dashboard.monthlyCommission')}</div>
                   <div className="text-2xl font-bold">¥{stats?.monthTotalCommission.toFixed(2) || '0.00'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">月度报账条数</div>
+                  <div className="text-sm text-muted-foreground mb-1">{t('dashboard.monthlyRecordCount')}</div>
                   <div className="text-2xl font-bold">{stats?.monthRecordCount || 0}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">月度加班总天数</div>
+                  <div className="text-sm text-muted-foreground mb-1">{t('dashboard.monthlyOvertimeDays')}</div>
                   <div className="text-2xl font-bold">{stats?.monthOvertimeDays || 0}</div>
                 </div>
               </div>
@@ -194,7 +184,7 @@ const DashboardPage: React.FC = () => {
         {/* 各司机月度概览表格 */}
         <Card>
           <CardHeader>
-            <CardTitle>各司机{selectedMonth.replace('-', '年')}月概览</CardTitle>
+            <CardTitle>{t('dashboard.driverMonthOverview', { month: selectedMonth.replace('-', '年') })}</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -207,21 +197,21 @@ const DashboardPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>司机</TableHead>
-                    <TableHead className="text-right">报账条数</TableHead>
-                    <TableHead className="text-right">支出合计</TableHead>
-                    <TableHead className="text-right">提成合计</TableHead>
-                    <TableHead className="text-right">待确认</TableHead>
-                    <TableHead className="text-right">已确认</TableHead>
-                    <TableHead className="text-right">加班天数</TableHead>
-                    <TableHead className="text-right">备用金余额</TableHead>
+                    <TableHead>{t('common.driver')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.recordCount')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.totalExpense')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.totalCommission')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.pendingCount')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.confirmedCount')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.overtimeDays')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.advanceBalance')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {driverStats.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (

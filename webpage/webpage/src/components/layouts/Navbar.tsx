@@ -7,10 +7,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, LogOut, User } from 'lucide-react';
+import { ChevronDown, LogOut, User, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
+import i18n, { LANGUAGE_STORAGE_KEY } from '@/i18n';
 
 const Navbar: React.FC = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
@@ -20,19 +23,27 @@ const Navbar: React.FC = () => {
     navigate('/login');
   };
 
+  const handleLanguageToggle = () => {
+    const nextLanguage = i18n.language === 'en' ? 'zh' : 'en';
+    void i18n.changeLanguage(nextLanguage);
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
+  };
+
+  const currentLanguageLabel = i18n.language === 'en' ? t('language.english') : t('language.chinese');
+
   const navItems = [
-    { path: '/', label: '数据看板' },
-    { path: '/expenses', label: '报账管理' },
-    { path: '/summary', label: '总表' },
-    { path: '/drivers', label: '司机管理' },
-    { path: '/vehicles', label: '车辆管理' },
-    { path: '/advance-funds', label: '备用金' },
+    { path: '/', label: t('nav.dashboard') },
+    { path: '/expenses', label: t('nav.expenses') },
+    { path: '/summary', label: t('nav.summary') },
+    { path: '/drivers', label: t('nav.drivers') },
+    { path: '/vehicles', label: t('nav.vehicles') },
+    { path: '/advance-funds', label: t('nav.advanceFunds') },
   ];
 
   const systemMenuItems = [
-    { path: '/fee-types', label: '费用类型管理' },
-    ...(isAdmin ? [{ path: '/staff', label: '客服账号管理' }] : []),
-    { path: '/logs', label: '操作日志' },
+    { path: '/fee-types', label: t('nav.feeTypes') },
+    ...(isAdmin ? [{ path: '/staff', label: t('nav.staff') }] : []),
+    { path: '/logs', label: t('nav.logs') },
   ];
 
   return (
@@ -41,7 +52,7 @@ const Navbar: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-2">
-              <div className="text-xl font-bold text-primary">司机报账管理系统</div>
+              <div className="text-xl font-bold text-primary">{t('brand.legacySystem')}</div>
             </div>
             <div className="flex space-x-1">
               {navItems.map((item) => (
@@ -66,7 +77,7 @@ const Navbar: React.FC = () => {
                     }
                     className="text-sm"
                   >
-                    系统设置
+                    {t('nav.systemSettings')}
                     <ChevronDown className="ml-1 h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -83,17 +94,28 @@ const Navbar: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-sm">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="text-foreground">{user?.name}</span>
-              <span className="text-muted-foreground">
-                ({user?.role === 'admin' ? '管理员' : '普通客服'})
-              </span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              退出
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-foreground">{user?.name}</span>
+                  <span className="text-muted-foreground">
+                    ({user?.role === 'admin' ? t('common.admin') : t('common.staff')})
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={handleLanguageToggle} className="justify-between">
+                  <span>{currentLanguageLabel}</span>
+                  <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout} className="justify-between">
+                  <span>{t('nav.logout')}</span>
+                  <LogOut className="h-4 w-4 text-muted-foreground" />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

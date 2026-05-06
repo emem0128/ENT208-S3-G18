@@ -1,0 +1,44 @@
+# 项目规则 - 司机报账系统
+
+## 技术栈
+- 小程序端：Taro + React + TypeScript + Tailwind CSS
+- 客服后台：React + TypeScript + Vite + Tailwind CSS
+- 数据库：Supabase (PostgreSQL)
+- 所有项目共用同一个 Supabase 数据库
+
+## 数据库表结构（字段名必须严格一致）
+
+### drivers（司机表）
+id, name, username, password, is_active, created_at
+
+### vehicles（车辆表）
+id, plate_number, vehicle_type('own'|'affiliated'|'rented'), source, is_active, created_at
+
+### expense_records（报账记录表，核心表）
+id, driver_id, record_date, plate_number, route,
+fee_weighing, fee_container, fee_overnight, fee_vn_overtime, fee_vn_key,
+fee_parking, fee_newpost, fee_taxi, fee_water, fee_tarpaulin, fee_highway, fee_stamp,
+note_amount, note_detail, total_expense, commission, receipt_images,
+is_overtime, status('pending'|'confirmed'), confirmed_by, confirmed_at, created_at, updated_at
+
+### service_staff（客服人员表）
+id, username, password, name, role('admin'|'staff'), created_at
+
+### advance_fund_records（备用金充值记录表）
+id, driver_id, amount, fund_date, month, note, created_at
+
+### fee_types（费用类型配置表）
+id, field_name, display_name, sort_order, is_active
+
+### operation_logs（操作日志表）
+id, operator_id, operator_name, action, target_type, target_id, detail, created_at
+
+## 关键约定
+- 登录字段是 username，不是 account
+- 备用金日期字段是 fund_date，不是 recharge_date
+- 总表 = expense_records 中 status='confirmed' 的记录
+- 加班天数 = is_overtime=true 且 status='confirmed' 的记录按 record_date 去重后的天数
+- status 只有 pending 和 confirmed 两种，没有驳回机制
+- confirmed 的记录锁定不可修改
+- 提成(commission)由客服填写，司机端只读
+- 备用金余额 = 充值总额 - 已确认支出总额

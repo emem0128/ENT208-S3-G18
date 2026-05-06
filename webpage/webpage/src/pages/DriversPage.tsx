@@ -14,8 +14,10 @@ import type { Driver } from '@/types/database';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const DriversPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ const DriversPage: React.FC = () => {
       setDrivers(data);
     } catch (error) {
       console.error('加载司机列表失败:', error);
-      toast.error('加载司机列表失败');
+      toast.error(t('toast.loadDriversFailed'));
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ const DriversPage: React.FC = () => {
     if (!user) return;
 
     if (!formData.name || !formData.username) {
-      toast.error('请填写完整信息');
+      toast.error(t('toast.fillRequired'));
       return;
     }
 
@@ -90,7 +92,7 @@ const DriversPage: React.FC = () => {
           target_id: editingDriver.id,
           detail: `修改司机信息：${formData.name}`,
         });
-        toast.success('修改成功');
+        toast.success(t('toast.updateSuccess'));
       } else {
         const newDriver = await createDriver({
           name: formData.name,
@@ -106,13 +108,13 @@ const DriversPage: React.FC = () => {
           target_id: newDriver.id,
           detail: `新增司机：${formData.name}`,
         });
-        toast.success('新增成功');
+        toast.success(t('toast.createSuccess'));
       }
       setDialogOpen(false);
       loadDrivers();
     } catch (error) {
       console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -128,11 +130,11 @@ const DriversPage: React.FC = () => {
         target_id: driver.id,
         detail: `${driver.is_active ? '停用' : '启用'}司机：${driver.name}`,
       });
-      toast.success(driver.is_active ? '已停用' : '已启用');
+      toast.success(driver.is_active ? t('toast.disabled') : t('toast.enabled'));
       loadDrivers();
     } catch (error) {
       console.error('操作失败:', error);
-      toast.error('操作失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -148,11 +150,11 @@ const DriversPage: React.FC = () => {
         target_id: resetPasswordDriver.id,
         detail: `重置密码：${resetPasswordDriver.name}`,
       });
-      toast.success('密码已重置为 123456');
+      toast.success(t('drivers.passwordReset'));
       setResetPasswordDriver(null);
     } catch (error) {
       console.error('重置密码失败:', error);
-      toast.error('重置密码失败，请重试');
+      toast.error(t('toast.operationFailed'));
     }
   };
 
@@ -164,15 +166,15 @@ const DriversPage: React.FC = () => {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold border-b pb-4 mb-6">司机管理</h1>
+          <h1 className="text-3xl font-bold border-b pb-4 mb-6">{t('drivers.title')}</h1>
           <div className="flex items-center gap-2">
             <Button onClick={loadDrivers} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
-              刷新
+              {t('common.refresh')}
             </Button>
             <Button onClick={() => handleOpenDialog()} size="sm">
               <Plus className="h-4 w-4 mr-2" />
-              新增司机
+              {t('drivers.add')}
             </Button>
           </div>
         </div>
@@ -181,7 +183,7 @@ const DriversPage: React.FC = () => {
           <CardContent className="pt-6">
             <div className="mb-4">
               <Input
-                placeholder="搜索司机姓名..."
+                placeholder={t('common.searchDriver')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
@@ -189,23 +191,23 @@ const DriversPage: React.FC = () => {
             </div>
 
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+              <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>姓名</TableHead>
-                    <TableHead>账号</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>创建时间</TableHead>
-                    <TableHead>操作</TableHead>
+                    <TableHead>{t('common.name')}</TableHead>
+                    <TableHead>{t('common.username')}</TableHead>
+                    <TableHead>{t('common.status')}</TableHead>
+                    <TableHead>{t('common.createdAt')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredDrivers.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        暂无数据
+                        {t('common.noData')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -216,11 +218,11 @@ const DriversPage: React.FC = () => {
                         <TableCell>
                           {driver.is_active ? (
                             <Badge variant="outline" className="bg-success/10 text-success border-success">
-                              在职
+                              {t('common.active')}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="bg-muted text-muted-foreground">
-                              离职
+                              {t('common.inactive')}
                             </Badge>
                           )}
                         </TableCell>
@@ -233,7 +235,7 @@ const DriversPage: React.FC = () => {
                               onClick={() => handleOpenDialog(driver)}
                             >
                               <Edit className="h-4 w-4 mr-1" />
-                              编辑
+                              {t('common.edit')}
                             </Button>
                             <Button
                               size="sm"
@@ -241,7 +243,7 @@ const DriversPage: React.FC = () => {
                               onClick={() => handleToggleActive(driver)}
                             >
                               <Power className="h-4 w-4 mr-1" />
-                              {driver.is_active ? '停用' : '启用'}
+                              {driver.is_active ? t('common.disabled') : t('common.enabled')}
                             </Button>
                             <Button
                               size="sm"
@@ -249,7 +251,7 @@ const DriversPage: React.FC = () => {
                               onClick={() => setResetPasswordDriver(driver)}
                             >
                               <Key className="h-4 w-4 mr-1" />
-                              重置密码
+                              {t('drivers.resetPassword')}
                             </Button>
                           </div>
                         </TableCell>
@@ -267,54 +269,54 @@ const DriversPage: React.FC = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingDriver ? '编辑司机' : '新增司机'}</DialogTitle>
+            <DialogTitle>{editingDriver ? t('drivers.edit') : t('drivers.add')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>姓名</Label>
+              <Label>{t('common.name')}</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="请输入姓名"
+                placeholder={t('common.inputName')}
               />
             </div>
             <div className="space-y-2">
-              <Label>账号</Label>
+              <Label>{t('common.username')}</Label>
               <Input
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                placeholder="请输入账号"
+                placeholder={t('common.inputUsername')}
                 disabled={!!editingDriver}
               />
             </div>
             {!editingDriver && (
               <div className="space-y-2">
-                <Label>密码</Label>
+                <Label>{t('common.password')}</Label>
                 <Input
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="默认密码：123456"
+                  placeholder={t('common.defaultPassword')}
                 />
               </div>
             )}
             {editingDriver && (
               <div className="space-y-2">
-                <Label>新密码（留空则不修改）</Label>
+                <Label>{t('common.newPassword')}</Label>
                 <Input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="留空则不修改密码"
+                  placeholder={t('common.leavePasswordBlank')}
                 />
               </div>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSubmit}>
-              {editingDriver ? '保存' : '新增'}
+              {editingDriver ? t('common.save') : t('common.add')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -324,14 +326,14 @@ const DriversPage: React.FC = () => {
       <AlertDialog open={!!resetPasswordDriver} onOpenChange={(open) => !open && setResetPasswordDriver(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认重置密码</AlertDialogTitle>
+            <AlertDialogTitle>{t('drivers.resetPasswordTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要将 {resetPasswordDriver?.name} 的密码重置为 123456 吗？
+              {t('drivers.resetPasswordDescription', { name: resetPasswordDriver?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleResetPassword}>确认</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetPassword}>{t('common.confirm')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

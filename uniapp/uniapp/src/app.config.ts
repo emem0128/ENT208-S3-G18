@@ -9,6 +9,7 @@ const pages = [
 
 export default defineAppConfig({
   pages,
+  lazyCodeLoading: 'requiredComponents',
   tabBar: {
     color: '#6b7280',
     selectedColor: '#3b82f6',

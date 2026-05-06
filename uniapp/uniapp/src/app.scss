@@ -31,6 +31,8 @@
     --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 70% 75%));
     --gradient-subtle: linear-gradient(180deg, hsl(210 40% 98%), hsl(0 0% 100%));
     --shadow-elegant: 0 10px 30px -10px hsl(217 91% 60% / 0.2);
+    --surface-ring: 0 0% 100%;
+    --surface-soft: 210 45% 97%;
   }
 
   .dark {
@@ -57,6 +59,34 @@
 }
 
 @layer utilities {
+  .page-shell {
+    position: relative;
+    background: var(--gradient-subtle);
+    min-height: 100vh;
+  }
+
+  .page-shell::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 8% 0%, hsl(217 90% 60% / 0.1), transparent 30%),
+      radial-gradient(circle at 100% 100%, hsl(190 80% 45% / 0.08), transparent 36%);
+  }
+
+  .surface-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 18px;
+  }
+
+  .soft-chip {
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--surface-soft));
+  }
+
   .bg-gradient-primary {
     background: var(--gradient-primary);
   }

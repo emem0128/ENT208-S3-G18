@@ -17,6 +17,26 @@ const viteVersionInfo = {
 
 export default defineConfig({
   ...userConfig,
+  server: {
+    ...(userConfig.server || {}),
+    proxy: {
+      ...(userConfig.server?.proxy || {}),
+      '/api/nvidia': {
+        target: 'https://integrate.api.nvidia.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/nvidia/, '/v1'),
+      },
+      '/api/ocr': {
+        target: 'http://119.91.129.106',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        },
+      },
+    },
+  },
   define: {
     __VITE_INFO__: JSON.stringify(viteVersionInfo),
     ...(userConfig.define || {})

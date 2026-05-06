@@ -36,6 +36,7 @@ export interface ExpenseRecord {
   fee_tarpaulin: number
   fee_highway: number
   fee_stamp: number
+  fee_location_detail?: string | null
   note_amount: number
   note_detail: string | null
   total_expense: number
@@ -47,6 +48,15 @@ export interface ExpenseRecord {
   is_overtime: boolean
   created_at: string
   updated_at: string
+  other_fees?: OtherFeeItem[]
+}
+
+export interface OtherFeeItem {
+  id?: number
+  expense_record_id?: number
+  name: string
+  amount: number
+  sort_order?: number
 }
 
 export interface ServiceStaff {
@@ -82,7 +92,7 @@ export interface FeeItem {
   field_name: string
   display_name: string
   amount: number
-  note?: string // 仅当 field_name 为 'other' 时使用
+  note?: string // 普通费用可记录地点，其他费用可记录名称/备注
 }
 
 // 车辆卡片数据（用于前端表单）
@@ -92,7 +102,6 @@ export interface VehicleCard {
   route: string
   fee_items: FeeItem[]
   receipt_images: UploadFileInput[]
-  note: string
   total: number
 }
 
